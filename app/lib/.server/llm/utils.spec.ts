@@ -20,8 +20,8 @@ describe('extractPropertiesFromMessage', () => {
   it('falls back to defaults when no markers are present', () => {
     const result = extractPropertiesFromMessage(userMessage('just do the thing'));
 
-    expect(result.model).toBe('claude-3-5-sonnet-latest');
-    expect(result.provider).toBe('OpenRouter');
+    expect(result.model).toBe('claude-opus-5-5');
+    expect(result.provider).toBe('Anthropic');
     expect(result.content).toBe('just do the thing');
   });
 
@@ -98,7 +98,7 @@ describe('extractPropertiesFromMessage', () => {
   it('does not treat a mid-message model mention as metadata', () => {
     const result = extractPropertiesFromMessage(userMessage('compare this to [Model: gpt-4o] behaviour'));
 
-    expect(result.model).toBe('claude-3-5-sonnet-latest');
+    expect(result.model).toBe('claude-opus-5-5');
     expect(result.content).toBe('compare this to [Model: gpt-4o] behaviour');
   });
 

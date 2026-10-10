@@ -38,6 +38,18 @@ export function isReasoningModel(modelName: string): boolean {
   return /^(o1|o3|gpt-5)/i.test(modelName);
 }
 
+/*
+ * Current Claude models (Fable 5.x, Mythos, Opus 4.7+/5.x, Sonnet 5.x, Haiku 5.x)
+ * reject sampling parameters (temperature/topP/topK) with a 400. Matched anywhere
+ * in the id so namespaced ids (`anthropic/claude-opus-5-5`, Bedrock
+ * `anthropic.claude-sonnet-5-5`) are covered too.
+ */
+export function rejectsSamplingParams(modelName: string): boolean {
+  return /claude-(fable|mythos)-|claude-opus-(4-7|4-8|5)|claude-sonnet-5|claude-haiku-5/i.test(modelName);
+}
+
+export const SAMPLING_PARAMS = ['temperature', 'topP', 'topK'] as const;
+
 // limits the number of model responses that can be returned in a single request
 export const MAX_RESPONSE_SEGMENTS = 2;
 

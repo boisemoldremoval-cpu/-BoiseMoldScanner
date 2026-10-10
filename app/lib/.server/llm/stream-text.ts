@@ -5,7 +5,14 @@ import {
   type ModelMessage,
   type UIMessage,
 } from 'ai';
-import { MAX_TOKENS, PROVIDER_COMPLETION_LIMITS, isReasoningModel, type FileMap } from './constants';
+import {
+  MAX_TOKENS,
+  PROVIDER_COMPLETION_LIMITS,
+  SAMPLING_PARAMS,
+  isReasoningModel,
+  rejectsSamplingParams,
+  type FileMap,
+} from './constants';
 import { withDevelopmentCommentaryWorkstyle } from './prompt-workstyle';
 import { createFilesContext, extractPropertiesFromMessage } from './utils';
 import { PromptLibrary } from '~/lib/common/prompt-library';
@@ -311,6 +318,14 @@ export async function streamText(props: {
         )
       : options || {};
 
+  const noSampling = rejectsSamplingParams(modelDetails.name);
+
+  if (noSampling) {
+    for (const key of SAMPLING_PARAMS) {
+      delete (filteredOptions as Record<string, unknown>)[key];
+    }
+  }
+
   // DEBUG: Log filtered options
   logger.info(
     `DEBUG STREAM: Options filtering for model "${modelDetails.name}":`,
@@ -355,7 +370,7 @@ export async function streamText(props: {
     ...(onChunk ? { onChunk } : {}),
 
     // Set temperature to 1 for reasoning models (required by OpenAI API)
-    ...(isReasoning ? { temperature: 1 } : {}),
+    ...(isReasoning && !noSampling ? { temperature: 1 } : {}),
   };
 
   // DEBUG: Log final streaming parameters
