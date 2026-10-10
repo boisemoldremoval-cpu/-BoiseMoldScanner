@@ -11,6 +11,7 @@ and build passing.
 | 0 | Import bolt.diy (`stackblitz-labs/bolt.diy@10d94fb`), install, baseline tests (451 tests; typecheck, lint, build green). |
 | 1 | Independent branding through `app/config/brand.ts` + `VITE_BRAND_*`, new logo/mark, accent palette, README/NOTICE, upstream release workflows removed. |
 | 2 | Claude as default provider (`claude-opus-5-5`), current Claude model list, fix for sampling params rejected by current Claude models. Local models (Ollama, LM Studio, OpenAI-compatible) unchanged and documented. |
+| 2.5 | Replit-style workspace: Run/Stop button, Console view (with "Ask AI to fix" on crash), per-project Secrets injected as env vars. |
 
 ## Already provided by the foundation
 
@@ -69,6 +70,13 @@ commercial license (see NOTICE):
   for static/edge apps; containers for full-stack).
 - Audit logging, secret scanning before GitHub push, CSP for the preview
   frame, end-to-end tests for the new flows.
+
+### Replit-style follow-ups
+
+- Projects dashboard ("My Apps") with templates and search, once cloud saving exists.
+- Configurable run command per project (a `.appforge` file), like Replit's `.replit`.
+- Multiplayer editing and comments (needs accounts + a realtime backend).
+- Secrets synced to the user's account (encrypted at rest) instead of browser-only.
 
 ## Decisions needed
 

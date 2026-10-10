@@ -16,9 +16,10 @@ body {
 
 :root {
   --gradient-opacity: 0.8;
-  --primary-color: rgba(158, 117, 240, var(--gradient-opacity));
-  --secondary-color: rgba(138, 43, 226, var(--gradient-opacity));
-  --accent-color: rgba(128, 59, 239, var(--gradient-opacity));
+  // Brand glow (matches the accent palette in uno.config.ts)
+  --primary-color: rgba(251, 146, 60, var(--gradient-opacity));
+  --secondary-color: rgba(234, 88, 12, var(--gradient-opacity));
+  --accent-color: rgba(249, 115, 22, var(--gradient-opacity));
   // --primary-color: rgba(147, 112, 219, var(--gradient-opacity));
   // --secondary-color: rgba(138, 43, 226, var(--gradient-opacity));
   // --accent-color: rgba(180, 170, 220, var(--gradient-opacity));

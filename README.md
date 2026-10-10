@@ -18,8 +18,10 @@ AppForge is built on [bolt.diy](https://github.com/stackblitz-labs/bolt.diy) (MI
 | Prompt-to-app AI agent | ✅ upstream | `app/lib/.server/llm`, `app/lib/runtime` |
 | Code editor (CodeMirror), file tree, diff view | ✅ upstream | `app/components/editor`, `app/components/workbench` |
 | Terminal | ✅ upstream | `app/components/workbench/terminal` |
+| **Run / Stop** button: install + start the app, output in a **Console** view | ✅ new | `app/lib/runner`, `RunButton.tsx`, `ConsolePanel.tsx` |
+| **Secrets**: per-project env vars injected at run time, never written to files | ✅ new | `app/lib/runner/secrets*.ts`, `SecretsPanel.tsx` |
 | Live preview | ✅ upstream | `app/components/workbench/Preview.tsx` |
-| Debugging: preview/terminal errors → "Ask AI to fix" | ✅ upstream | `app/lib/webcontainer/index.ts`, `ChatAlert.tsx` |
+| Debugging: preview/terminal errors and crashed runs → "Ask AI to fix" | ✅ upstream + new | `app/lib/webcontainer/index.ts`, `ChatAlert.tsx` |
 | Project saving (browser IndexedDB, snapshots, export/import) | ✅ upstream | `app/lib/persistence` |
 | GitHub / GitLab import & push | ✅ upstream | `app/components/git`, `app/components/deploy` |
 | Deployment: Netlify, Vercel, GitHub | ✅ upstream | `app/routes/api.*-deploy.ts` |

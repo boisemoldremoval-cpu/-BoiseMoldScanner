@@ -7,9 +7,12 @@ import { computed } from 'nanostores';
 import { memo, useCallback, useEffect, useState, useMemo, useRef, lazy, Suspense } from 'react';
 import type { JSX } from 'react';
 import { toast } from 'react-toastify';
+import { ConsolePanel } from './ConsolePanel';
 import { EditorPanel } from './EditorPanel';
-
 import type { ElementInfo } from './Inspector';
+import { RunButton } from './RunButton';
+import { SecretsPanel } from './SecretsPanel';
+
 import { ExportChatButton } from '~/components/chat/chatExportAndImport/ExportChatButton';
 import {
   type OnChangeCallback as OnEditorChange,
@@ -60,6 +63,19 @@ const sliderOptions: SliderOptions<WorkbenchViewType> = {
     text: 'Preview',
   },
 };
+
+/* Horizontal order of the views, used to slide them in from the correct side. */
+const VIEW_ORDER: WorkbenchViewType[] = ['code', 'diff', 'preview', 'console', 'secrets'];
+
+function viewOffset(view: WorkbenchViewType, selected: WorkbenchViewType) {
+  const delta = VIEW_ORDER.indexOf(view) - VIEW_ORDER.indexOf(selected);
+  return delta === 0 ? '0%' : delta < 0 ? '-100%' : '100%';
+}
+
+const toolTabs: Array<{ view: WorkbenchViewType; label: string; icon: string }> = [
+  { view: 'console', label: 'Console', icon: 'i-ph:terminal-window' },
+  { view: 'secrets', label: 'Secrets', icon: 'i-ph:lock-key' },
+];
 
 const workbenchVariants = {
   closed: {
@@ -445,7 +461,24 @@ export const Workbench = memo(
                     }}
                   />
                   <Slider selected={selectedView} options={sliderOptions} setSelected={setSelectedView} />
+                  {toolTabs.map((tab) => (
+                    <button
+                      key={tab.view}
+                      type="button"
+                      onClick={() => setSelectedView(tab.view)}
+                      className={classNames(
+                        'flex items-center gap-1 px-2.5 py-1 text-sm rounded-full transition-colors',
+                        selectedView === tab.view
+                          ? 'bg-bolt-elements-item-backgroundAccent text-bolt-elements-item-contentAccent'
+                          : 'text-bolt-elements-textSecondary hover:text-bolt-elements-textPrimary',
+                      )}
+                    >
+                      <span className={tab.icon} />
+                      <span className="hidden xl:inline">{tab.label}</span>
+                    </button>
+                  ))}
                   <div className="ml-auto" />
+                  <RunButton disabled={streaming} />
                   {selectedView === 'code' && (
                     <div className="flex overflow-y-auto">
                       {/* Export Chat Button */}
@@ -521,7 +554,7 @@ export const Workbench = memo(
                   />
                 </div>
                 <div className="relative flex-1 overflow-hidden">
-                  <View initial={{ x: '0%' }} animate={{ x: selectedView === 'code' ? '0%' : '-100%' }}>
+                  <View initial={{ x: '0%' }} animate={{ x: viewOffset('code', selectedView) }}>
                     <EditorPanel
                       editorDocument={currentDocument}
                       isStreaming={isStreaming}
@@ -537,10 +570,7 @@ export const Workbench = memo(
                     />
                   </View>
                   {loadedViews.has('diff') ? (
-                    <View
-                      initial={{ x: '100%' }}
-                      animate={{ x: selectedView === 'diff' ? '0%' : selectedView === 'code' ? '100%' : '-100%' }}
-                    >
+                    <View initial={{ x: '100%' }} animate={{ x: viewOffset('diff', selectedView) }}>
                       <Suspense
                         fallback={
                           <div className="flex items-center justify-center h-full">
@@ -553,7 +583,7 @@ export const Workbench = memo(
                     </View>
                   ) : null}
                   {loadedViews.has('preview') ? (
-                    <View initial={{ x: '100%' }} animate={{ x: selectedView === 'preview' ? '0%' : '100%' }}>
+                    <View initial={{ x: '100%' }} animate={{ x: viewOffset('preview', selectedView) }}>
                       <Suspense
                         fallback={
                           <div className="flex items-center justify-center h-full">
@@ -563,6 +593,16 @@ export const Workbench = memo(
                       >
                         <Preview setSelectedElement={setSelectedElement} />
                       </Suspense>
+                    </View>
+                  ) : null}
+                  {loadedViews.has('console') ? (
+                    <View initial={{ x: '100%' }} animate={{ x: viewOffset('console', selectedView) }}>
+                      <ConsolePanel />
+                    </View>
+                  ) : null}
+                  {loadedViews.has('secrets') ? (
+                    <View initial={{ x: '100%' }} animate={{ x: viewOffset('secrets', selectedView) }}>
+                      <SecretsPanel />
                     </View>
                   ) : null}
                 </div>

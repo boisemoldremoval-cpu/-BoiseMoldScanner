@@ -34,10 +34,7 @@ export const Slider = genericMemo(<T,>({ selected, options, setSelected }: Slide
         </SliderButton>
       )}
 
-      <SliderButton
-        selected={!isLeftSelected && !isMiddleSelected}
-        setSelected={() => setSelected?.(options.right.value)}
-      >
+      <SliderButton selected={selected === options.right.value} setSelected={() => setSelected?.(options.right.value)}>
         {options.right.text}
       </SliderButton>
     </div>
