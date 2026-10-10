@@ -1,4 +1,5 @@
 import { getApiKeysFromCookie } from '~/lib/api/cookies';
+import { BRAND } from '~/lib/brand';
 import { withSecurity } from '~/lib/security';
 
 async function githubUserLoader({ request, context }: { request: Request; context: any }) {
@@ -25,7 +26,7 @@ async function githubUserLoader({ request, context }: { request: Request; contex
       headers: {
         Accept: 'application/vnd.github.v3+json',
         Authorization: `Bearer ${githubToken}`,
-        'User-Agent': 'bolt.diy-app',
+        'User-Agent': BRAND.userAgent,
       },
     });
 
@@ -116,7 +117,7 @@ async function githubUserAction({ request, context }: { request: Request; contex
         headers: {
           Accept: 'application/vnd.github.v3+json',
           Authorization: `Bearer ${githubToken}`,
-          'User-Agent': 'bolt.diy-app',
+          'User-Agent': BRAND.userAgent,
         },
       });
 
@@ -165,7 +166,7 @@ async function githubUserAction({ request, context }: { request: Request; contex
         headers: {
           Accept: 'application/vnd.github.v3+json',
           Authorization: `Bearer ${githubToken}`,
-          'User-Agent': 'bolt.diy-app',
+          'User-Agent': BRAND.userAgent,
         },
       });
 
@@ -213,7 +214,7 @@ async function githubUserAction({ request, context }: { request: Request; contex
           headers: {
             Accept: 'application/vnd.github.v3+json',
             Authorization: `Bearer ${githubToken}`,
-            'User-Agent': 'bolt.diy-app',
+            'User-Agent': BRAND.userAgent,
           },
         },
       );

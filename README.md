@@ -1,159 +1,56 @@
-# bolt.diy
+# Buildwright
 
-[![bolt.diy: AI-Powered Full-Stack Web Development in the Browser](./public/social_preview_index(1).jpg)](https://bolt.diy)
+Buildwright is an AI app builder. You describe an app in plain English, and an AI agent writes the code, runs it and shows you a live preview. You can then keep iterating in chat or edit the code yourself.
 
-Welcome to **bolt.diy**, the open-source AI developer workspace that lets you select your preferred LLM for every prompt. Build full-stack web applications in the browser with support for 21+ model providers (OpenAI, Anthropic, Gemini, Groq, xAI, DeepSeek, Ollama, LM Studio, and more), or extend it with any provider supported by the Vercel AI SDK.
+> **Name and branding:** "Buildwright" is a placeholder. All user-visible branding comes from
+> [`app/lib/brand.ts`](app/lib/brand.ts), and the logo files are `public/logo.svg`, `public/favicon.svg`,
+> `public/favicon.ico` and `public/apple-touch-icon*.png`.
 
-[Documentation](https://stackblitz-labs.github.io/bolt.diy/) | [Community Forum](https://thinktank.ottomator.ai) | [FAQ & Troubleshooting](FAQ.md)
+Buildwright is built on [bolt.diy](https://github.com/stackblitz-labs/bolt.diy), which is MIT licensed. See [NOTICE.md](NOTICE.md) for attribution, and [docs/ROADMAP.md](docs/ROADMAP.md) for what exists today and what is still planned.
 
----
+## Features available today
 
-Also [this pinned post in our community](https://thinktank.ottomator.ai/t/videos-tutorial-helpful-content/3243) has a bunch of incredible resources for running and deploying bolt.diy yourself!
+- **AI chat agent** that generates and edits full projects. Anthropic Claude is the default provider.
+- **Local open-source models** through Ollama, LM Studio, or any OpenAI-compatible server (vLLM, llama.cpp, etc.).
+- **Code editor** (CodeMirror), with diff view and file locking.
+- **Terminal** and **live preview**, running in a WebContainer that is sandboxed in the user's browser.
+- **Error assist:** preview and terminal errors can be sent to the AI to fix.
+- **GitHub and GitLab:** import a repo, or push a project to a repo.
+- **Deploy** to Netlify or Vercel.
+- **Supabase** integration for databases and auth in the apps users generate.
+- **Project history:** chats and project snapshots are saved in the browser (IndexedDB), with export and import.
 
-bolt.diy was originally started by [Cole Medin](https://www.youtube.com/@ColeMedin) but has quickly grown into a massive community effort to build the BEST open source AI coding assistant!
+## Getting started
 
----
-
-## Table of Contents
-
-- [Quick Start](#quick-start)
-- [Running with Docker](#running-with-docker)
-- [Desktop App (Electron)](#desktop-app-electron)
-- [Configuring API Keys and Providers](#configuring-api-keys-and-providers)
-- [Features](#features)
-- [Recent Highlights](#recent-highlights)
-- [Available Scripts](#available-scripts)
-- [Contributing & Community](#contributing--community)
-- [Licensing](#licensing)
-
----
-
-## Quick Start
-
-### Prerequisites
-- **Node.js** >= 22.12.0
-- **pnpm** >= 9.15.9 (`npm install -g pnpm`)
-
-### 1. Clone & Install
+Requirements: Node.js 22.12 or newer, and pnpm 9.
 
 ```bash
-git clone https://github.com/stackblitz-labs/bolt.diy.git
-cd bolt.diy
 pnpm install
+cp .env.example .env.local   # add ANTHROPIC_API_KEY, and/or OLLAMA_API_BASE_URL etc.
+pnpm dev                     # http://localhost:5173
 ```
 
-### 2. Run the Development Server
+API keys can also be entered in the UI, under the provider selector or in Settings → Providers.
+
+### Using a local model
+
+1. Run [Ollama](https://ollama.com) (`ollama serve`) or LM Studio. In LM Studio, enable CORS.
+2. Set `OLLAMA_API_BASE_URL=http://127.0.0.1:11434` or `LMSTUDIO_API_BASE_URL=http://127.0.0.1:1234` in `.env.local`, or enable the provider in Settings → Providers → Local.
+3. Pick the provider and model in the chat box.
+
+Code generation quality depends heavily on the model. Small local models often fail to follow the artifact format.
+
+## Checks
 
 ```bash
-pnpm run dev
+pnpm test        # unit, integration and performance tests (vitest)
+pnpm typecheck
+pnpm lint
+pnpm build
+pnpm test:e2e    # Playwright; needs a running app and a model API key
 ```
 
-Open [http://localhost:5173](http://localhost:5173) in your browser.
+## Licensing notes
 
-> **Pre-built Desktop Binaries**: Prefer a standalone app? Download binaries for Windows, macOS, and Linux from our [Latest Releases](https://github.com/stackblitz-labs/bolt.diy/releases/latest).
-
----
-
-## Running with Docker
-
-1. **Configure Environment Variables**:
-   ```bash
-   cp .env.example .env.local
-   ```
-
-2. **Build and Run**:
-   ```bash
-   # Development mode with hot-reload:
-   docker compose --profile development up
-
-   # Production build:
-   pnpm run dockerbuild:prod
-   docker compose --profile production up
-   ```
-
----
-
-## Desktop App (Electron)
-
-bolt.diy is also available as a cross-platform desktop application:
-
-- **Download**: Grab pre-built installers from [Latest Releases](https://github.com/stackblitz-labs/bolt.diy/releases/latest).
-- **Build from Source**:
-  ```bash
-  pnpm electron:build:dist
-  ```
-
----
-
-## Configuring API Keys and Providers
-
-You can configure model providers either directly in the UI or via environment variables:
-
-### Option A: In the UI (Recommended)
-Click the **Settings** icon (⚙️) in the sidebar → **Providers**. Enter your API keys or configure local endpoints (Ollama, LM Studio, OpenAI-compatible). Keys are validated in real time and stored securely in your browser cookies.
-
-### Option B: Environment Variables
-Copy `.env.example` to `.env.local` and add your keys or local endpoints:
-
-```bash
-# Cloud Providers
-ANTHROPIC_API_KEY=your_key_here
-OPENAI_API_KEY=your_key_here
-GEMINI_API_KEY=your_key_here
-
-# Local Providers
-OLLAMA_BASE_URL=http://127.0.0.1:11434
-LMSTUDIO_BASE_URL=http://127.0.0.1:1234
-```
-
----
-
-## Features
-
-- **In-Browser Web Development**: Full-stack Node.js development environment powered by WebContainers.
-- **21+ AI Providers**: Cloud (Anthropic, OpenAI, Google, DeepSeek, Groq, xAI, Mistral, etc.) and Local (Ollama, LM Studio).
-- **Interactive Workbench**: Integrated code editor, terminal, visual diff viewer, and real-time live preview.
-- **Project Workflows**: Git cloning/pushing, snapshot restoration, file conflict locking, and ZIP export.
-- **Deployments**: One-click deployment to Netlify, Vercel, and GitHub Pages.
-- **Database & Visuals**: Supabase integration, data visualization charts, and Model Context Protocol (MCP) tooling.
-
----
-
-## Recent Highlights
-
-- **Expanded AI & Tooling Ecosystem**: 21+ cloud and local LLM providers, Model Context Protocol (MCP) integration, and voice prompting.
-- **Enhanced Code & Project Workflows**: Visual diff inspection, file conflict locking, codebase search, Git integration, and snapshot restoration.
-- **Cross-Platform & Deployments**: Native Electron desktop app, Expo (React Native) support, and direct deployment to Netlify, Vercel, and GitHub Pages.
-- **Data & Backend Integrations**: Built-in Supabase management, interactive charts, and bulk chat operations.
-
-> **Looking Ahead**: Ongoing work includes bug Fixes, dependance updates and fixes for reliability issues no new features are planed.
-
----
-
-## Available Scripts
-
-| Command | Description |
-|---|---|
-| `pnpm run dev` | Start development server with hot module reloading |
-| `pnpm run build` | Build the application for production (`react-router build`) |
-| `pnpm run preview` | Preview production build locally |
-| `pnpm test` | Run unit and integration tests with Vitest |
-| `pnpm run typecheck` | Run TypeScript type checks (`tsc`) |
-| `pnpm run lint` | Run ESLint across the codebase |
-| `pnpm run dockerbuild` | Build Docker container for development |
-| `pnpm run electron:dev` | Start Electron desktop application in dev mode |
-| `pnpm electron:build:dist` | Package Electron desktop app for current OS |
-
----
-
-## Contributing & Community
-
-- **Contributing**: Contributions are welcome! Read our [Contributing Guide](CONTRIBUTING.md) and [Project Management Guide](./PROJECT.md) to get started.
-- **Troubleshooting & FAQ**: Common errors and setup fixes are documented in our [FAQ](FAQ.md) and [Official Docs](https://stackblitz-labs.github.io/bolt.diy/).
-
-
----
-
-## Licensing
-
-bolt.diy is open-source under the MIT License. It utilizes the [WebContainers API](https://webcontainers.io/enterprise), which has specific commercial licensing terms for enterprise deployment.
+- Buildwright's own code and the bolt.diy code it is based on are released under the MIT license ([LICENSE](LICENSE)).
+- The in-browser runtime uses the StackBlitz **WebContainer API**, which has its own terms. Commercial production use requires a license from StackBlitz: see https://webcontainers.io/enterprise. Sort this out before launching a paid product, or replace the runtime (see roadmap, Stage 4).

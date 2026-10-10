@@ -1,4 +1,5 @@
 import { getApiKeysFromCookie } from '~/lib/api/cookies';
+import { BRAND } from '~/lib/brand';
 import { withSecurity } from '~/lib/security';
 
 async function netlifyUserLoader({ request, context }: { request: Request; context: any }) {
@@ -21,7 +22,7 @@ async function netlifyUserLoader({ request, context }: { request: Request; conte
     const response = await fetch('https://api.netlify.com/api/v1/user', {
       headers: {
         Authorization: `Bearer ${netlifyToken}`,
-        'User-Agent': 'bolt.diy-app',
+        'User-Agent': BRAND.userAgent,
       },
     });
 
@@ -90,7 +91,7 @@ async function netlifyUserAction({ request, context }: { request: Request; conte
         headers: {
           Authorization: `Bearer ${netlifyToken}`,
           'Content-Type': 'application/json',
-          'User-Agent': 'bolt.diy-app',
+          'User-Agent': BRAND.userAgent,
         },
       });
 

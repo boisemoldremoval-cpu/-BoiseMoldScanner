@@ -37,7 +37,7 @@ export class PromptLibrary {
     },
     'simple-sal': {
       label: 'Simple Sal',
-      description: 'Balanced prompt with core Bolt features and no-fluff communication',
+      description: 'Balanced prompt with core platform features and no-fluff communication',
       get: (options) => getSimpleSalPrompt(options.cwd, options.supabase, options.designScheme),
     },
     'tiny-tim': {

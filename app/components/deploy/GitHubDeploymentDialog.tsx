@@ -6,6 +6,7 @@ import { useState, useEffect } from 'react';
 import { toast } from 'react-toastify';
 import { GitHubAuthDialog } from '~/components/@settings/tabs/github/components/GitHubAuthDialog';
 import { SearchInput, EmptyState, StatusIndicator, Badge } from '~/components/ui';
+import { BRAND } from '~/lib/brand';
 import { getLocalStorage } from '~/lib/persistence/localStorage';
 import { chatId } from '~/lib/persistence/useChatHistory';
 import { logStore } from '~/lib/stores/logs';
@@ -413,7 +414,7 @@ export function GitHubDeploymentDialog({ isOpen, onClose, projectName, files }: 
         const { data: commitData } = await octokit.git.createCommit({
           owner: connection.user.login,
           repo: sanitizedRepoName,
-          message: !repoExists ? 'Initial commit from Bolt.diy' : 'Update from Bolt.diy',
+          message: !repoExists ? `Initial commit from ${BRAND.name}` : `Update from ${BRAND.name}`,
           tree: treeData.sha,
           parents: parentCommitSha ? [parentCommitSha] : [], // Use parent if available
         });

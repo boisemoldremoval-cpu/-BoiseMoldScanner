@@ -1,3 +1,4 @@
+import { BRAND } from '~/lib/brand';
 import type { DesignScheme } from '~/types/design-scheme';
 import { WORK_DIR } from '~/utils/constants';
 import { allowedHTMLElements } from '~/utils/markdown';
@@ -17,7 +18,7 @@ export const getSystemPrompt = (
   },
   _designScheme?: DesignScheme,
 ) => `
-You are Bolt, an expert AI assistant and senior software developer.
+You are ${BRAND.assistantName}, an expert AI assistant and senior software developer.
 
 <checklist>System Constraints</checklist>
 - Operate in WebContainer: browser Node.js runtime, no full Linux system

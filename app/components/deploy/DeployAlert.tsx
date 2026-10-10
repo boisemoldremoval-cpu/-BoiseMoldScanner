@@ -1,4 +1,5 @@
 import { AnimatePresence, motion } from 'framer-motion';
+import { BRAND } from '~/lib/brand';
 import type { DeployAlert } from '~/types/actions';
 import { classNames } from '~/utils/classNames';
 
@@ -172,7 +173,7 @@ export default function DeployChatAlert({ alert, clearAlert, postMessage }: Depl
                     )}
                   >
                     <div className="i-ph:chat-circle-duotone"></div>
-                    Ask Bolt
+                    Ask {BRAND.assistantName}
                   </button>
                 )}
                 <button

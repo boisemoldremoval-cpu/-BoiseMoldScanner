@@ -15,6 +15,7 @@ import { ColorSchemeDialog } from '~/components/ui/ColorSchemeDialog';
 import { IconButton } from '~/components/ui/IconButton';
 import { ExpoQrModal } from '~/components/workbench/ExpoQrModal';
 import type { ElementInfo } from '~/components/workbench/Inspector';
+import { BRAND } from '~/lib/brand';
 import { LOCAL_PROVIDERS } from '~/lib/stores/settings';
 import type { DesignScheme } from '~/types/design-scheme';
 import type { ProviderInfo } from '~/types/model';
@@ -238,7 +239,11 @@ export const ChatBox: React.FC<ChatBoxProps> = (props) => {
             minHeight: props.TEXTAREA_MIN_HEIGHT,
             maxHeight: props.TEXTAREA_MAX_HEIGHT,
           }}
-          placeholder={props.chatMode === 'build' ? 'How can Bolt help you today?' : 'What would you like to discuss?'}
+          placeholder={
+            props.chatMode === 'build'
+              ? `How can ${BRAND.assistantName} help you today?`
+              : 'What would you like to discuss?'
+          }
           translate="no"
         />
         <ClientOnly>

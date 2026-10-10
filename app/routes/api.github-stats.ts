@@ -1,4 +1,5 @@
 import { getApiKeysFromCookie } from '~/lib/api/cookies';
+import { BRAND } from '~/lib/brand';
 import { withSecurity } from '~/lib/security';
 import type { GitHubUserResponse, GitHubStats } from '~/types/GitHub';
 
@@ -26,7 +27,7 @@ async function githubStatsLoader({ request, context }: { request: Request; conte
       headers: {
         Accept: 'application/vnd.github.v3+json',
         Authorization: `Bearer ${githubToken}`,
-        'User-Agent': 'bolt.diy-app',
+        'User-Agent': BRAND.userAgent,
       },
     });
 
@@ -52,7 +53,7 @@ async function githubStatsLoader({ request, context }: { request: Request; conte
           headers: {
             Accept: 'application/vnd.github.v3+json',
             Authorization: `Bearer ${githubToken}`,
-            'User-Agent': 'bolt.diy-app',
+            'User-Agent': BRAND.userAgent,
           },
         },
       );
@@ -79,7 +80,7 @@ async function githubStatsLoader({ request, context }: { request: Request; conte
             headers: {
               Accept: 'application/vnd.github.v3+json',
               Authorization: `Bearer ${githubToken}`,
-              'User-Agent': 'bolt.diy-app',
+              'User-Agent': BRAND.userAgent,
             },
           });
 

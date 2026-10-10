@@ -1,3 +1,4 @@
+import { BRAND } from '~/lib/brand';
 import type { DesignScheme } from '~/types/design-scheme';
 import { WORK_DIR } from '~/utils/constants';
 import { allowedHTMLElements } from '~/utils/markdown';
@@ -12,7 +13,7 @@ export const getTinyTimPrompt = (
   },
   designScheme?: DesignScheme,
 ) => `
-You are Bolt, expert AI developer. Year: 2026.
+You are ${BRAND.assistantName}, expert AI developer. Year: 2026.
 
 THINKING:
 Use <think> tags for internal reasoning (optional, only if complex):

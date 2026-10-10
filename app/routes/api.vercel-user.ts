@@ -1,4 +1,5 @@
 import { getApiKeysFromCookie } from '~/lib/api/cookies';
+import { BRAND } from '~/lib/brand';
 import { withSecurity } from '~/lib/security';
 
 async function vercelUserLoader({ request, context }: { request: Request; context: any }) {
@@ -30,7 +31,7 @@ async function vercelUserLoader({ request, context }: { request: Request; contex
     const response = await fetch('https://api.vercel.com/v2/user', {
       headers: {
         Authorization: `Bearer ${vercelToken}`,
-        'User-Agent': 'bolt.diy-app',
+        'User-Agent': BRAND.userAgent,
       },
     });
 
@@ -109,7 +110,7 @@ async function vercelUserAction({ request, context }: { request: Request; contex
       const response = await fetch('https://api.vercel.com/v13/projects', {
         headers: {
           Authorization: `Bearer ${vercelToken}`,
-          'User-Agent': 'bolt.diy-app',
+          'User-Agent': BRAND.userAgent,
         },
       });
 

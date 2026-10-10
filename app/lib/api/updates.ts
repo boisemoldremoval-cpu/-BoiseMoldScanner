@@ -1,3 +1,4 @@
+import { BRAND } from '~/lib/brand';
 export interface UpdateCheckResult {
   available: boolean;
   version: string;
@@ -35,6 +36,10 @@ function compareVersions(v1: string, v2: string): number {
 }
 
 export const checkForUpdates = async (): Promise<UpdateCheckResult> => {
+  if (!BRAND.updateCheckRepo) {
+    return { available: false, version: 'unknown' };
+  }
+
   try {
     // Get the current version from local package.json
     const packageResponse = await fetch('/package.json');
@@ -56,7 +61,7 @@ export const checkForUpdates = async (): Promise<UpdateCheckResult> => {
      * Using raw.githubusercontent.com which doesn't require authentication
      */
     const latestPackageResponse = await fetch(
-      'https://raw.githubusercontent.com/stackblitz-labs/bolt.diy/main/package.json',
+      `https://raw.githubusercontent.com/${BRAND.updateCheckRepo}/main/package.json`,
     );
 
     if (!latestPackageResponse.ok) {
