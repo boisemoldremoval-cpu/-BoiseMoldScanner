@@ -1,3 +1,4 @@
+import { BRAND } from '~/config/brand';
 import type {
   GitHubUserResponse,
   GitHubRepoInfo,
@@ -52,7 +53,7 @@ export class GitHubApiServiceClass {
       headers: {
         Accept: 'application/vnd.github.v3+json',
         Authorization: `${this._config.tokenType === 'classic' ? 'token' : 'Bearer'} ${this._config.token}`,
-        'User-Agent': 'Bolt.diy',
+        'User-Agent': BRAND.userAgent,
         ...options.headers,
       },
       ...options,
@@ -140,7 +141,7 @@ export class GitHubApiServiceClass {
       headers: {
         Accept: 'application/vnd.github.v3+json',
         Authorization: `${this._config.tokenType === 'classic' ? 'token' : 'Bearer'} ${this._config.token}`,
-        'User-Agent': 'Bolt.diy',
+        'User-Agent': BRAND.userAgent,
       },
     });
 
@@ -168,7 +169,7 @@ export class GitHubApiServiceClass {
       headers: {
         Accept: 'application/vnd.github.v3+json',
         Authorization: `${this._config.tokenType === 'classic' ? 'token' : 'Bearer'} ${this._config.token}`,
-        'User-Agent': 'Bolt.diy',
+        'User-Agent': BRAND.userAgent,
       },
     });
 
@@ -196,7 +197,7 @@ export class GitHubApiServiceClass {
       headers: {
         Accept: 'application/vnd.github.v3+json',
         Authorization: `${this._config.tokenType === 'classic' ? 'token' : 'Bearer'} ${this._config.token}`,
-        'User-Agent': 'Bolt.diy',
+        'User-Agent': BRAND.userAgent,
       },
     });
 

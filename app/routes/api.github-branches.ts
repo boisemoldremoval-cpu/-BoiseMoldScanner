@@ -1,3 +1,4 @@
+import { BRAND } from '~/config/brand';
 import { getApiKeysFromCookie } from '~/lib/api/cookies';
 import { withSecurity } from '~/lib/security';
 
@@ -71,7 +72,7 @@ async function githubBranchesLoader({ request, context }: { request: Request; co
       headers: {
         Accept: 'application/vnd.github.v3+json',
         Authorization: `Bearer ${githubToken}`,
-        'User-Agent': 'bolt.diy-app',
+        'User-Agent': BRAND.userAgent,
       },
     });
 
@@ -95,7 +96,7 @@ async function githubBranchesLoader({ request, context }: { request: Request; co
       headers: {
         Accept: 'application/vnd.github.v3+json',
         Authorization: `Bearer ${githubToken}`,
-        'User-Agent': 'bolt.diy-app',
+        'User-Agent': BRAND.userAgent,
       },
     });
 

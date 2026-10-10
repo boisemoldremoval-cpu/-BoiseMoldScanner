@@ -1,4 +1,5 @@
 import { AnimatePresence, motion } from 'framer-motion';
+import { BRAND } from '~/config/brand';
 import type { ActionAlert } from '~/types/actions';
 import { classNames } from '~/utils/classNames';
 
@@ -15,8 +16,8 @@ export default function ChatAlert({ alert, clearAlert, postMessage }: Props) {
   const title = isPreview ? 'Preview Error' : 'Terminal Error';
 
   const message = isPreview
-    ? 'We encountered an error while running the preview. Would you like Bolt to analyze and help resolve this issue?'
-    : 'We encountered an error while running terminal commands. Would you like Bolt to analyze and help resolve this issue?';
+    ? `We encountered an error while running the preview. Would you like ${BRAND.name} to analyze and help resolve this issue?`
+    : `We encountered an error while running terminal commands. Would you like ${BRAND.name} to analyze and help resolve this issue?`;
 
   return (
     <AnimatePresence>
@@ -85,7 +86,7 @@ export default function ChatAlert({ alert, clearAlert, postMessage }: Props) {
                   )}
                 >
                   <div className="i-ph:chat-circle-duotone"></div>
-                  Ask Bolt
+                  Ask {BRAND.name}
                 </button>
                 <button
                   onClick={clearAlert}

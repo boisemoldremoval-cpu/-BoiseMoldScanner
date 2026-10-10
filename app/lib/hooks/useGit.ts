@@ -4,6 +4,7 @@ import http from 'isomorphic-git/http/web';
 import Cookies from 'js-cookie';
 import { useCallback, useEffect, useRef, useState, type MutableRefObject } from 'react';
 import { toast } from 'react-toastify';
+import { BRAND } from '~/config/brand';
 import { webcontainer as webcontainerPromise } from '~/lib/webcontainer';
 
 const lookupSavedPassword = (url: string) => {
@@ -65,7 +66,7 @@ export function useGit() {
       const headers: {
         [x: string]: string;
       } = {
-        'User-Agent': 'bolt.diy',
+        'User-Agent': BRAND.userAgent,
       };
 
       const auth = lookupSavedPassword(url);

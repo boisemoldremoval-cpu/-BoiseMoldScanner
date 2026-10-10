@@ -3,6 +3,7 @@ import Cookies from 'js-cookie';
 import { useState, useEffect, useCallback } from 'react';
 import { toast } from 'react-toastify';
 import { useGitHubAPI } from './useGitHubAPI';
+import { BRAND } from '~/config/brand';
 import { githubConnection, isConnecting, updateGitHubConnection } from '~/lib/stores/github';
 import type { GitHubUserResponse, GitHubConnection } from '~/types/GitHub';
 
@@ -76,7 +77,7 @@ export function useGitHubConnection(): UseGitHubConnectionReturn {
         headers: {
           Accept: 'application/vnd.github.v3+json',
           Authorization: `${connection.tokenType === 'classic' ? 'token' : 'Bearer'} ${connection.token}`,
-          'User-Agent': 'Bolt.diy',
+          'User-Agent': BRAND.userAgent,
         },
       });
 
@@ -119,7 +120,7 @@ export function useGitHubConnection(): UseGitHubConnectionReturn {
         headers: {
           Accept: 'application/vnd.github.v3+json',
           Authorization: `${tokenType === 'classic' ? 'token' : 'Bearer'} ${token}`,
-          'User-Agent': 'Bolt.diy',
+          'User-Agent': BRAND.userAgent,
         },
       });
 
@@ -224,7 +225,7 @@ export function useGitHubConnection(): UseGitHubConnectionReturn {
         headers: {
           Accept: 'application/vnd.github.v3+json',
           Authorization: `${connection.tokenType === 'classic' ? 'token' : 'Bearer'} ${connection.token}`,
-          'User-Agent': 'Bolt.diy',
+          'User-Agent': BRAND.userAgent,
         },
       });
 

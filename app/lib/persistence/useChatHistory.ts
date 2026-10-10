@@ -18,6 +18,7 @@ import {
 } from './db';
 import { createMessage, getMessageAnnotations, hasMessageFlag, type AnyPart } from './messageMigration';
 import type { Snapshot } from './types';
+import { BRAND } from '~/config/brand';
 import type { FileMap } from '~/lib/stores/files';
 import { logStore } from '~/lib/stores/logs'; // Import logStore
 import { workbenchStore } from '~/lib/stores/workbench';
@@ -155,7 +156,7 @@ export function useChatHistory() {
               // Call the modified function to get only the command actions string
               const commandActionsString = createCommandActionsString(projectCommands);
 
-              const restoredAssistantText = `Bolt Restored your chat from a snapshot. You can revert this message to load the full chat history.
+              const restoredAssistantText = `${BRAND.name} restored your chat from a snapshot. You can revert this message to load the full chat history.
                   <boltArtifact id="restored-project-setup" title="Restored Project & Setup" type="bundled">
                   ${Object.entries(snapshot?.files || {})
                     .map(([key, value]) => {

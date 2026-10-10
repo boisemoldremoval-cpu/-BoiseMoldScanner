@@ -22,6 +22,7 @@ import type { ElementInfo } from '~/components/workbench/Inspector';
 const LazyWorkbench = lazy(() =>
   import('~/components/workbench/Workbench.client').then((m) => ({ default: m.Workbench })),
 );
+import { BRAND } from '~/config/brand';
 import { StickToBottom, useStickToBottomContext } from '~/lib/hooks';
 import type { ModelInfo } from '~/lib/modules/llm/types';
 import { expoUrlAtom } from '~/lib/stores/qrCodeStore';
@@ -339,10 +340,10 @@ export const BaseChat = React.forwardRef<HTMLDivElement, BaseChatProps>(
             {!chatStarted && (
               <div id="intro" className="mt-[16vh] max-w-2xl mx-auto text-center px-4 lg:px-0">
                 <h1 className="text-3xl lg:text-6xl font-bold text-bolt-elements-textPrimary mb-4 animate-fade-in">
-                  Where ideas begin
+                  {BRAND.heroTitle}
                 </h1>
                 <p className="text-md lg:text-xl mb-8 text-bolt-elements-textSecondary animate-fade-in animation-delay-200">
-                  Bring ideas to life in seconds or get help on existing projects.
+                  {BRAND.tagline}
                 </p>
               </div>
             )}

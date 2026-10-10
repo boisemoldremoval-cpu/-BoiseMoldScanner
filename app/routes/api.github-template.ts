@@ -1,4 +1,5 @@
 import JSZip from 'jszip';
+import { BRAND } from '~/config/brand';
 
 // Function to detect if we're running in Cloudflare
 function isCloudflareEnvironment(context: any): boolean {
@@ -31,7 +32,7 @@ async function fetchRepoContentsCloudflare(repo: string, githubToken?: string) {
   const repoResponse = await fetch(`${baseUrl}/repos/${repo}`, {
     headers: {
       Accept: 'application/vnd.github.v3+json',
-      'User-Agent': 'bolt.diy-app',
+      'User-Agent': BRAND.userAgent,
       ...(githubToken ? { Authorization: `Bearer ${githubToken}` } : {}),
     },
   });
@@ -56,7 +57,7 @@ async function fetchRepoContentsCloudflare(repo: string, githubToken?: string) {
   const treeResponse = await fetch(`${baseUrl}/repos/${repo}/git/trees/${defaultBranch}?recursive=1`, {
     headers: {
       Accept: 'application/vnd.github.v3+json',
-      'User-Agent': 'bolt.diy-app',
+      'User-Agent': BRAND.userAgent,
       ...(githubToken ? { Authorization: `Bearer ${githubToken}` } : {}),
     },
   });
@@ -103,7 +104,7 @@ async function fetchRepoContentsCloudflare(repo: string, githubToken?: string) {
         const contentResponse = await fetch(`${baseUrl}/repos/${repo}/contents/${file.path}`, {
           headers: {
             Accept: 'application/vnd.github.v3+json',
-            'User-Agent': 'bolt.diy-app',
+            'User-Agent': BRAND.userAgent,
             ...(githubToken ? { Authorization: `Bearer ${githubToken}` } : {}),
           },
         });
@@ -147,7 +148,7 @@ async function fetchRepoContentsZip(repo: string, githubToken?: string) {
   const releaseResponse = await fetch(`${baseUrl}/repos/${repo}/releases/latest`, {
     headers: {
       Accept: 'application/vnd.github.v3+json',
-      'User-Agent': 'bolt.diy-app',
+      'User-Agent': BRAND.userAgent,
       ...(githubToken ? { Authorization: `Bearer ${githubToken}` } : {}),
     },
   });

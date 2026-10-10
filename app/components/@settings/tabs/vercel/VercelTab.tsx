@@ -6,6 +6,7 @@ import { toast } from 'react-toastify';
 import { ServiceHeader, ConnectionTestIndicator } from '~/components/@settings/shared/service-integration';
 import { Button } from '~/components/ui/Button';
 import { Collapsible, CollapsibleTrigger, CollapsibleContent } from '~/components/ui/Collapsible';
+import { BRAND } from '~/config/brand';
 import { useConnectionTest } from '~/lib/hooks';
 import { logStore } from '~/lib/stores/logs';
 import {
@@ -221,7 +222,7 @@ export default function VercelTab() {
       const testResponse = await fetch('https://api.vercel.com/v2/user', {
         headers: {
           Authorization: `Bearer ${token}`,
-          'User-Agent': 'bolt.diy-app',
+          'User-Agent': BRAND.userAgent,
         },
       });
 

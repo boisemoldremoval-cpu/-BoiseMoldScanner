@@ -1,6 +1,7 @@
 import { Octokit } from '@octokit/rest';
 import type { ActionFunctionArgs } from 'react-router';
 import { z } from 'zod';
+import { BRAND } from '~/config/brand';
 
 // Rate limiting store (in production, use Redis or similar)
 const rateLimitStore = new Map<string, { count: number; resetTime: number }>();
@@ -114,7 +115,7 @@ function formatIssueBody(data: z.infer<typeof bugReportSchema>): string {
     }
 
     if (data.environmentInfo.boltVersion) {
-      body += `- bolt.diy: ${data.environmentInfo.boltVersion}\n`;
+      body += `- ${BRAND.name}: ${data.environmentInfo.boltVersion}\n`;
     }
 
     if (data.environmentInfo.aiProviders) {
@@ -136,7 +137,7 @@ function formatIssueBody(data: z.infer<typeof bugReportSchema>): string {
     body += `**Contact:** ${data.contactEmail}\n\n`;
   }
 
-  body += '---\n*Submitted via bolt.diy bug report feature*';
+  body += `---\n*Submitted via ${BRAND.name} bug report feature*`;
 
   return body;
 }
@@ -197,7 +198,7 @@ export async function action({ request, context }: ActionFunctionArgs) {
     const githubToken =
       (context?.cloudflare?.env as any)?.GITHUB_BUG_REPORT_TOKEN || process.env.GITHUB_BUG_REPORT_TOKEN;
     const targetRepo =
-      (context?.cloudflare?.env as any)?.BUG_REPORT_REPO || process.env.BUG_REPORT_REPO || 'stackblitz-labs/bolt.diy';
+      (context?.cloudflare?.env as any)?.BUG_REPORT_REPO || process.env.BUG_REPORT_REPO || BRAND.githubRepo;
 
     if (!githubToken) {
       console.error('GitHub bug report token not configured');
@@ -210,7 +211,7 @@ export async function action({ request, context }: ActionFunctionArgs) {
     // Initialize GitHub client
     const octokit = new Octokit({
       auth: githubToken,
-      userAgent: 'bolt.diy-bug-reporter',
+      userAgent: `${BRAND.userAgent}-bug-reporter`,
     });
 
     // Create GitHub issue

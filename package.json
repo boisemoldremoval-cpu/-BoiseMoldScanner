@@ -1,14 +1,13 @@
 {
-  "name": "bolt",
-  "description": "An AI Agent",
+  "name": "appforge",
+  "description": "AI application builder: describe an app in plain English and get a working application",
   "private": true,
   "license": "MIT",
   "sideEffects": false,
   "type": "module",
   "version": "1.0.0",
   "author": {
-    "name": "bolt.diy team",
-    "email": "maintainers@bolt.diy"
+    "name": "AppForge"
   },
   "scripts": {
     "deploy": "pnpm run build && wrangler deploy",

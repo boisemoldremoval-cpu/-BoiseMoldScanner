@@ -2,6 +2,7 @@ import { generateText, type UIMessage } from 'ai';
 import ignore from 'ignore';
 import { IGNORE_PATTERNS, type FileMap } from './constants';
 import { createFilesContext, extractCurrentContext, extractPropertiesFromMessage, simplifyBoltActions } from './utils';
+import { BRAND } from '~/config/brand';
 import { LLMManager } from '~/lib/modules/llm/manager';
 import { createMessage, getFirstTextPart, getMessageText } from '~/lib/persistence/messageMigration';
 import type { IProviderSetting } from '~/types/model';
@@ -224,7 +225,7 @@ export async function selectContext(props: {
   logger.info(`Total files: ${totalFiles}`);
 
   if (totalFiles == 0) {
-    throw new Error(`Bolt failed to select files`);
+    throw new Error(`${BRAND.name} failed to select files`);
   }
 
   return filteredFiles;

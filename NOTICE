@@ -1,0 +1,11 @@
+AppForge
+Copyright (c) 2026 AppForge
+
+This product is built on bolt.diy (https://github.com/stackblitz-labs/bolt.diy),
+Copyright (c) 2024 StackBlitz, Inc. and bolt.diy contributors, used under the
+MIT License (see LICENSE). The upstream README is kept at docs/UPSTREAM_README.md.
+
+In-browser code execution uses the StackBlitz WebContainer API
+(@webcontainer/api), which is licensed separately from bolt.diy. Production use
+in a commercial, for-profit product requires a commercial WebContainer license
+from StackBlitz: https://webcontainers.io/enterprise

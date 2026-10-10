@@ -1,3 +1,4 @@
+import { BRAND } from '~/config/brand';
 import { withSecurity } from '~/lib/security';
 import type { GitLabProjectInfo } from '~/types/GitLab';
 
@@ -31,7 +32,7 @@ async function gitlabProjectsLoader({ request }: { request: Request }) {
       headers: {
         Authorization: `Bearer ${token}`,
         Accept: 'application/json',
-        'User-Agent': 'bolt.diy-app',
+        'User-Agent': BRAND.userAgent,
       },
     });
 
