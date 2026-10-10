@@ -38,6 +38,16 @@ export function isReasoningModel(modelName: string): boolean {
   return /^(o1|o3|gpt-5)/i.test(modelName);
 }
 
+/*
+ * Current Claude models reject sampling parameters (temperature, top_p, top_k)
+ * with a 400, so they must not be sent at all. Matches bare ids as well as
+ * namespaced ids such as `anthropic/claude-opus-5-5` (OpenRouter) and
+ * `anthropic.claude-opus-5-5` (Bedrock).
+ */
+export function rejectsSamplingParams(modelName: string): boolean {
+  return /(^|[/.])claude-(fable|mythos|opus-5|opus-4-[78]|sonnet-5|haiku-5)/i.test(modelName);
+}
+
 // limits the number of model responses that can be returned in a single request
 export const MAX_RESPONSE_SEGMENTS = 2;
 

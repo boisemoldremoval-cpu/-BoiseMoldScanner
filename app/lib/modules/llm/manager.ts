@@ -255,14 +255,14 @@ export class LLMManager {
 
   getDefaultProvider(): BaseProvider {
     /*
-     * Prefer OpenRouter explicitly. Registration order follows the export
+     * Prefer Anthropic explicitly. Registration order follows the export
      * order of ./registry, which would otherwise make the default depend on
      * which provider happens to be listed first.
      */
-    const openRouter = this._providers.get('OpenRouter');
+    const anthropic = this._providers.get('Anthropic');
 
-    if (openRouter) {
-      return openRouter;
+    if (anthropic) {
+      return anthropic;
     }
 
     const firstProvider = this._providers.values().next().value;

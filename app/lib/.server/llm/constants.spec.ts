@@ -1,5 +1,11 @@
 import { describe, expect, it } from 'vitest';
-import { MAX_RESPONSE_SEGMENTS, MAX_TOKENS, PROVIDER_COMPLETION_LIMITS, isReasoningModel } from './constants';
+import {
+  MAX_RESPONSE_SEGMENTS,
+  MAX_TOKENS,
+  PROVIDER_COMPLETION_LIMITS,
+  isReasoningModel,
+  rejectsSamplingParams,
+} from './constants';
 
 describe('LLM constants', () => {
   it('keeps the OpenRouter completion limit within the affordable token budget', () => {
@@ -55,6 +61,25 @@ describe('LLM constants', () => {
       expect(isReasoningModel('openai/o3')).toBe(false);
       expect(isReasoningModel('openai/gpt-5')).toBe(false);
       expect(isReasoningModel('stealth/space-bunny-alpha')).toBe(false);
+    });
+  });
+
+  describe('rejectsSamplingParams', () => {
+    it.each([
+      ['claude-opus-5-5', true],
+      ['claude-sonnet-5-5', true],
+      ['claude-haiku-5-5', true],
+      ['claude-fable-5-1', true],
+      ['claude-opus-4-8', true],
+      ['anthropic/claude-sonnet-5-5', true],
+      ['anthropic.claude-opus-5-5', true],
+      ['claude-sonnet-4-6', false],
+      ['claude-haiku-4-5', false],
+      ['gpt-4o', false],
+      ['llama3.1:8b', false],
+      ['', false],
+    ])('classifies %s as %s', (model, expected) => {
+      expect(rejectsSamplingParams(model)).toBe(expected);
     });
   });
 });

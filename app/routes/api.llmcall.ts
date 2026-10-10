@@ -1,6 +1,11 @@
 import { generateText, type UIMessage } from 'ai';
 import type { ActionFunctionArgs } from 'react-router';
-import { MAX_TOKENS, PROVIDER_COMPLETION_LIMITS, isReasoningModel } from '~/lib/.server/llm/constants';
+import {
+  MAX_TOKENS,
+  PROVIDER_COMPLETION_LIMITS,
+  isReasoningModel,
+  rejectsSamplingParams,
+} from '~/lib/.server/llm/constants';
 import { toLlmCallResponse } from '~/lib/.server/llm/llmcall-response';
 import { streamText } from '~/lib/.server/llm/stream-text';
 import { getApiKeysFromCookie, getProviderSettingsFromCookie } from '~/lib/api/cookies';
@@ -212,10 +217,19 @@ async function llmCallAction({ context, request }: ActionFunctionArgs) {
         toolChoice: 'none' as const,
       };
 
-      // For reasoning models, set temperature to 1 (required by OpenAI API)
-      const finalParams = isReasoning
-        ? { ...baseParams, temperature: 1 } // Set to 1 for reasoning models (only supported value)
-        : { ...baseParams, temperature: 0 };
+      /*
+       * Reasoning models only accept temperature 1 (OpenAI API). Current Claude
+       * models reject any sampling parameter, so none is sent for them.
+       */
+      let finalParams: typeof baseParams & { temperature?: number };
+
+      if (rejectsSamplingParams(modelDetails.name)) {
+        finalParams = baseParams;
+      } else if (isReasoning) {
+        finalParams = { ...baseParams, temperature: 1 };
+      } else {
+        finalParams = { ...baseParams, temperature: 0 };
+      }
 
       // DEBUG: Log final parameters
       logger.info(

@@ -5,7 +5,13 @@ import {
   type ModelMessage,
   type UIMessage,
 } from 'ai';
-import { MAX_TOKENS, PROVIDER_COMPLETION_LIMITS, isReasoningModel, type FileMap } from './constants';
+import {
+  MAX_TOKENS,
+  PROVIDER_COMPLETION_LIMITS,
+  isReasoningModel,
+  rejectsSamplingParams,
+  type FileMap,
+} from './constants';
 import { withDevelopmentCommentaryWorkstyle } from './prompt-workstyle';
 import { createFilesContext, extractPropertiesFromMessage } from './utils';
 import { PromptLibrary } from '~/lib/common/prompt-library';
@@ -293,8 +299,10 @@ export async function streamText(props: {
   const tokenParams = { maxOutputTokens: safeMaxTokens };
 
   // Filter out unsupported parameters for reasoning models
+  const stripSampling = isReasoning || rejectsSamplingParams(modelDetails.name);
+
   const filteredOptions =
-    isReasoning && options
+    stripSampling && options
       ? Object.fromEntries(
           Object.entries(options).filter(
             ([key]) =>
