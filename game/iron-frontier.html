@@ -754,9 +754,14 @@
   const reqMet = (o, req) => !req || have(o, req);
 
   // Painted building art (art/ folder). ax, ay: pixel at the footprint centre; ppt: pixels per map tile.
-  // Painted building art goes here once it is drawn for this camera (straight-on, about 58 degrees down).
-  // Example entry: hq: { 0: { src: 'art/S01-vanguard.webp', w: 1152, h: 768, ax: 576, ay: 520, ppt: 300 } },
+  // Painted building art (art/ folder). The pictures are isometric, so each is centred on its footprint and
+  // sized so its base spans the footprint width. ax, ay: pixel at the footprint centre; ppt: pixels per map tile.
   const ART = {
+    hq: { 0: { src: 'art/S01-vanguard.webp', w: 1152, h: 768, ax: 579, ay: 487, ppt: 328 } },
+    power: { 0: { src: 'art/S02-vanguard.webp', w: 1152, h: 768, ax: 580, ay: 462, ppt: 489 } },
+    // the painted refinery includes its unloading dock, so it covers 3 x 3 tiles and sits half a tile toward the front
+    refinery: { 0: { src: 'art/S03-vanguard.webp', w: 1152, h: 768, ax: 576, ay: 483, ppt: 326, oz: 0.5 } },
+    factory: { 0: { src: 'art/S06-vanguard.webp', w: 1152, h: 1152, ax: 576, ay: 804, ppt: 326 } },
   };
   const artTex = {};
   Object.values(ART).forEach(byOwner => Object.values(byOwner).forEach(a => {
