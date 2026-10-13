@@ -60,6 +60,7 @@
   .card { position: relative; display: grid; background: linear-gradient(#2F322F, #1D1F1D); padding: 2px; color: var(--fg); text-align: left; cursor: pointer; min-width: 0; }
   .card .ico { position: relative; display: block; overflow: hidden; border: 1px solid #000; }
   .card img { width: 100%; aspect-ratio: 4 / 3; object-fit: cover; display: block; background: #0B0C0B; }
+  .card img[src^="art/"] { object-fit: contain; padding: 2px; background: radial-gradient(#2A2D2A, #0B0C0B); }
   .card .wipe { position: absolute; inset: 0; display: none; background: conic-gradient(transparent 0 calc(var(--p, 0) * 360deg), rgba(0, 0, 0, .7) calc(var(--p, 0) * 360deg) 360deg); }
   .card.busy .wipe { display: block; }
   .card .ov { position: absolute; inset: 0; display: grid; place-items: center; text-align: center; font: 800 15px/1 var(--display); letter-spacing: .1em; color: var(--gold); text-shadow: 0 0 6px #000, 0 1px 0 #000; }
@@ -753,15 +754,21 @@
   const tileOf = e => clamp(Math.floor(e.z), 0, N - 1) * N + clamp(Math.floor(e.x), 0, N - 1);
   const reqMet = (o, req) => !req || have(o, req);
 
-  // Painted building art (art/ folder). ax, ay: pixel at the footprint centre; ppt: pixels per map tile.
-  // Painted building art (art/ folder). The pictures are isometric, so each is centred on its footprint and
+  // Painted building art (art/ folder, Vanguard Batch 1). The pictures are isometric, so each is centred on its footprint and
   // sized so its base spans the footprint width. ax, ay: pixel at the footprint centre; ppt: pixels per map tile.
   const ART = {
-    hq: { 0: { src: 'art/S01-vanguard.webp', w: 1152, h: 768, ax: 579, ay: 487, ppt: 328 } },
-    power: { 0: { src: 'art/S02-vanguard.webp', w: 1152, h: 768, ax: 580, ay: 462, ppt: 489 } },
+    hq: { 0: { src: 'art/S01-vanguard.webp', w: 1024, h: 1002, ax: 512, ay: 731, ppt: 297 } },
+    power: { 0: { src: 'art/S02-vanguard.webp', w: 1024, h: 986, ax: 512, ay: 703, ppt: 445 } },
     // the painted refinery includes its unloading dock, so it covers 3 x 3 tiles and sits half a tile toward the front
-    refinery: { 0: { src: 'art/S03-vanguard.webp', w: 1152, h: 768, ax: 576, ay: 483, ppt: 326, oz: 0.5 } },
-    factory: { 0: { src: 'art/S06-vanguard.webp', w: 1152, h: 1152, ax: 576, ay: 804, ppt: 326 } },
+    refinery: { 0: { src: 'art/S03-vanguard.webp', w: 1024, h: 969, ax: 512, ay: 658, ppt: 297, oz: 0.5 } },
+    silo: { 0: { src: 'art/S04-vanguard.webp', w: 1024, h: 1002, ax: 512, ay: 692, ppt: 556 } },
+    barracks: { 0: { src: 'art/S05-vanguard.webp', w: 1024, h: 826, ax: 488, ay: 506, ppt: 425 } },
+    factory: { 0: { src: 'art/S06-vanguard.webp', w: 1024, h: 955, ax: 512, ay: 646, ppt: 297 } },
+    radar: { 0: { src: 'art/S07-vanguard.webp', w: 1024, h: 1018, ax: 512, ay: 735, ppt: 445 } },
+    // vehicles park on the repair pad, so it is drawn underneath them
+    repair: { 0: { src: 'art/S08-vanguard.webp', w: 1024, h: 966, ax: 512, ay: 580, ppt: 445, flat: true } },
+    tower: { 0: { src: 'art/S09-vanguard.webp', w: 1024, h: 883, ax: 512, ay: 596, ppt: 890 } },
+    atower: { 0: { src: 'art/S10-vanguard.webp', w: 1024, h: 1196, ax: 512, ay: 885, ppt: 890 } },
   };
   const artTex = {};
   Object.values(ART).forEach(byOwner => Object.values(byOwner).forEach(a => {
@@ -773,6 +780,7 @@
     const keep = new Set([b.ring, b.wrench, b.primaryTag, b.rangeRing]);
     b.obj.children.forEach(c => { if (!keep.has(c)) { c.visible = false; } });
     const m = new THREE.Mesh(new THREE.PlaneGeometry(a.w / a.ppt, a.h / a.ppt), new THREE.MeshBasicMaterial({ map: tex, alphaTest: 0.5 }));
+    if (a.flat) { m.material.depthWrite = false; m.renderOrder = -5; }
     m.userData.off = { x: (a.ax - a.w / 2) / a.ppt, y: (a.ay - a.h / 2) / a.ppt, z: a.oz || 0 };
     b.obj.add(m); b.art = m;
   }
@@ -2059,7 +2067,7 @@
     const mk = (type, isUnit, list) => {
       const d = isUnit ? UNIT[type] : BLD[type];
       const b = document.createElement('button'); b.type = 'button'; b.className = 'card'; b.title = `${d.name} · $${d.cost}\n${d.desc}`;
-      b.innerHTML = `<span class="ico"><img alt="" src="${thumbs[type]}"><span class="wipe"></span><span class="ov"></span></span><span class="nm">${d.name}</span><span class="sub"></span><span class="badge" hidden></span>`;
+      b.innerHTML = `<span class="ico"><img alt="" src="${(!isUnit && ART[type] && ART[type][0]) ? ART[type][0].src : thumbs[type]}"><span class="wipe"></span><span class="ov"></span></span><span class="nm">${d.name}</span><span class="sub"></span><span class="badge" hidden></span>`;
       b.addEventListener('click', () => { initAudio(); if (isUnit) { unitCard(type); } else { structCard(type); } refreshUI(); });
       b.addEventListener('contextmenu', e => { e.preventDefault(); if (isUnit) { unitCancel(type); } else { structCancel(type); } refreshUI(); });
       list.appendChild(b); cardEls[type] = b;
