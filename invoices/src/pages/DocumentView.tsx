@@ -14,10 +14,11 @@ import {
   type MenuItem,
 } from '../components.tsx';
 import { useFetch } from '../hooks.ts';
+import { IS_DEMO } from '../env.ts';
 import { navigate } from '../router.ts';
 
 export function publicLink(doc: DocumentDetail) {
-  return `${window.location.origin}/#/i/${doc.publicToken}`;
+  return `${window.location.origin}${window.location.pathname}#/i/${doc.publicToken}`;
 }
 
 export function DocumentView({ id }: { id: number }) {
@@ -70,7 +71,7 @@ export function DocumentView({ id }: { id: number }) {
   const convertIsPrimary = canConvert && doc.state === 'accepted';
 
   const menu: MenuItem[] = [
-    { label: 'Print / Save PDF', onSelect: () => window.print() },
+    ...(IS_DEMO ? [] : [{ label: 'Print / Save PDF', onSelect: () => window.print() }]),
     ...(doc.kind === 'estimate' && doc.state === 'sent'
       ? [
           { label: 'Mark accepted', onSelect: () => setState('accepted') },
@@ -249,9 +250,15 @@ function ShareModal({ doc, business, onClose }: { doc: DocumentDetail; business:
           <input readOnly value={link} onFocus={(e) => e.target.select()} aria-label="Customer link" />
           <button
             className="button"
-            onClick={async () => {
-              await navigator.clipboard.writeText(link);
-              setCopied(true);
+            onClick={async (e) => {
+              try {
+                await navigator.clipboard.writeText(link);
+                setCopied(true);
+              } catch {
+                // Some browsers block clipboard access; select the link so it can be copied by hand.
+                const input = e.currentTarget.parentElement?.querySelector('input');
+                input?.select();
+              }
             }}
           >
             {copied ? 'Copied' : 'Copy'}
@@ -269,9 +276,15 @@ function ShareModal({ doc, business, onClose }: { doc: DocumentDetail; business:
               Text {doc.customer.phone}
             </a>
           )}
-          <a className="button" href={link} target="_blank" rel="noreferrer">
-            Preview
-          </a>
+          {IS_DEMO ? (
+            <a className="button" href={`#/i/${doc.publicToken}`}>
+              See what the customer sees
+            </a>
+          ) : (
+            <a className="button" href={link} target="_blank" rel="noreferrer">
+              Preview
+            </a>
+          )}
         </div>
         <div className="actions">
           <button className="button" onClick={onClose}>

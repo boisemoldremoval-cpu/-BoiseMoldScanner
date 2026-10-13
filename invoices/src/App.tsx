@@ -1,8 +1,9 @@
 import { useEffect, useState } from 'react';
 import { get, post } from './api.ts';
-import { Field, Icon } from './components.tsx';
+import { Field, Icon, LogoMark } from './components.tsx';
+import { IS_DEMO } from './env.ts';
 import type { BusinessSettings } from '../shared/types.ts';
-import { useRoute } from './router.ts';
+import { navigate, useRoute } from './router.ts';
 import { Customers } from './pages/Customers.tsx';
 import { DocumentEditor } from './pages/DocumentEditor.tsx';
 import { DocumentView } from './pages/DocumentView.tsx';
@@ -39,6 +40,7 @@ export function App() {
 function OwnerApp({ route }: { route: string[] }) {
   const [session, setSession] = useState<Session | null>(null);
   const [businessName, setBusinessName] = useState('');
+  const [resets, setResets] = useState(0);
 
   useEffect(() => {
     const load = () => get<Session>('/session').then(setSession);
@@ -54,7 +56,7 @@ function OwnerApp({ route }: { route: string[] }) {
         .then((settings) => setBusinessName(settings.name))
         .catch(() => undefined);
     }
-  }, [session?.authenticated, route[0]]);
+  }, [session?.authenticated, route[0], resets]);
 
   if (!session) {
     return null;
@@ -68,7 +70,7 @@ function OwnerApp({ route }: { route: string[] }) {
     <div className="shell">
       <nav className="nav no-print">
         <a href="#/" className="nav-brand">
-          <img src="/favicon.svg" alt="" width={26} height={26} />
+          <LogoMark />
           <span className="truncate">{businessName || 'Invoices'}</span>
         </a>
         <div className="nav-links">
@@ -92,7 +94,24 @@ function OwnerApp({ route }: { route: string[] }) {
         )}
       </nav>
       <main className="content">
-        <Page route={route} />
+        {IS_DEMO && (
+          <div className="demo-banner no-print">
+            <span>
+              <strong>Demo.</strong> Sample data, saved only in this browser.
+            </span>
+            <button
+              className="link-button"
+              onClick={async () => {
+                await post('/demo/reset');
+                setResets(resets + 1);
+                navigate('/');
+              }}
+            >
+              Reset sample data
+            </button>
+          </div>
+        )}
+        <Page key={resets} route={route} />
       </main>
     </div>
   );

@@ -15,6 +15,15 @@ const STATUS_LABELS: Record<string, string> = {
   converted: 'Invoiced',
 };
 
+export function LogoMark({ size = 26 }: { size?: number }) {
+  return (
+    <svg width={size} height={size} viewBox="0 0 16 16" aria-hidden="true">
+      <rect width="16" height="16" rx="3.5" fill="#1F6F5C" />
+      <path d="M5 4h6M5 7h6M5 10h3.5" stroke="#fff" strokeWidth="1.4" strokeLinecap="round" />
+    </svg>
+  );
+}
+
 export function StatusBadge({ status }: { status: string }) {
   return <span className={`badge badge-${status}`}>{STATUS_LABELS[status] ?? status}</span>;
 }

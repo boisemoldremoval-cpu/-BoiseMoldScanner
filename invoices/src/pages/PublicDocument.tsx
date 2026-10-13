@@ -3,6 +3,7 @@ import { formatCents } from '../../shared/totals.ts';
 import type { PublicDocument as PublicDocumentData } from '../../shared/types.ts';
 import { get, post } from '../api.ts';
 import { DocumentPaper } from '../components.tsx';
+import { IS_DEMO } from '../env.ts';
 
 // What the customer sees when they open the link from an email or text.
 export function PublicDocument({ token }: { token: string }) {
@@ -49,6 +50,14 @@ export function PublicDocument({ token }: { token: string }) {
 
   return (
     <main className="public stack">
+      {IS_DEMO && (
+        <div className="demo-banner">
+          <span>
+            <strong>Demo.</strong> This is the page your customer sees from their link.
+          </span>
+          <a href={`#/${doc.kind}s/${doc.id}`}>← Back to the app</a>
+        </div>
+      )}
       <div className="public-bar no-print">
         {doc.kind === 'invoice' ? (
           doc.status === 'paid' ? (
@@ -83,9 +92,11 @@ export function PublicDocument({ token }: { token: string }) {
               : 'This estimate was declined.'}
           </strong>
         )}
-        <button className="button" onClick={() => window.print()}>
-          Download / Print
-        </button>
+        {!IS_DEMO && (
+          <button className="button" onClick={() => window.print()}>
+            Download / Print
+          </button>
+        )}
       </div>
       <DocumentPaper doc={doc} business={business} />
     </main>

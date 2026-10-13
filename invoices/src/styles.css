@@ -325,6 +325,24 @@ p {
   border-radius: 6px;
 }
 
+.demo-banner {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 8px 16px;
+  flex-wrap: wrap;
+  background: var(--warn-soft);
+  color: #5c4300;
+  border-radius: var(--radius);
+  padding: 10px 14px;
+  font-size: 0.9rem;
+  margin-bottom: 20px;
+}
+
+.public .demo-banner {
+  margin-bottom: 0;
+}
+
 .notice {
   background: var(--info-soft);
   color: var(--info);
