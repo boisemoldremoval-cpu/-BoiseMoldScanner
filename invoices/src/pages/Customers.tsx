@@ -3,6 +3,10 @@ import type { Customer } from '../../shared/types.ts';
 import { del, post, put } from '../api.ts';
 import { Field } from '../components.tsx';
 import { useFetch } from '../hooks.ts';
+import { navigate } from '../router.ts';
+import { formatCents } from '../../shared/totals.ts';
+import type { DocumentSummary } from '../../shared/types.ts';
+import { DocumentTable } from './lists.tsx';
 
 type CustomerInput = Omit<Customer, 'id' | 'createdAt'>;
 
@@ -111,14 +115,16 @@ export function Customers() {
             </thead>
             <tbody>
               {rows.map((c) => (
-                <tr key={c.id}>
+                <tr key={c.id} className="clickable" onClick={() => navigate(`/customers/${c.id}`)}>
                   <td>
-                    <div className="strong">{c.name}</div>
+                    <a href={`#/customers/${c.id}`} className="strong" onClick={(e) => e.stopPropagation()}>
+                      {c.name}
+                    </a>
                     {c.company && <div className="muted small">{c.company}</div>}
                   </td>
                   <td>{c.email}</td>
                   <td className="hide-sm">{c.phone}</td>
-                  <td className="num nowrap">
+                  <td className="num nowrap" onClick={(e) => e.stopPropagation()}>
                     <button className="link-button" onClick={() => setEditing(c)}>
                       Edit
                     </button>
@@ -157,6 +163,104 @@ export function Customers() {
               onSaved={async () => {
                 setEditing(null);
                 await reload();
+              }}
+            />
+          </div>
+        </div>
+      )}
+    </div>
+  );
+}
+
+export function CustomerDetail({ id }: { id: number }) {
+  const { data: customer, setData: setCustomer, error } = useFetch<Customer>(`/customers/${id}`);
+  const { data: invoices } = useFetch<DocumentSummary[]>('/documents?kind=invoice');
+  const { data: estimates } = useFetch<DocumentSummary[]>('/documents?kind=estimate');
+  const [editing, setEditing] = useState(false);
+
+  if (error) {
+    return <p className="error">{error}</p>;
+  }
+
+  if (!customer || !invoices || !estimates) {
+    return <p className="muted">Loading…</p>;
+  }
+
+  const theirs = [...invoices, ...estimates]
+    .filter((doc) => doc.customerId === id)
+    .sort((a, b) => (a.issueDate < b.issueDate ? 1 : a.issueDate > b.issueDate ? -1 : b.id - a.id));
+  const billed = theirs.filter((d) => d.kind === 'invoice' && d.status !== 'void' && d.status !== 'draft');
+  const sumOf = (values: number[]) => values.reduce((a, b) => a + b, 0);
+
+  return (
+    <div className="stack">
+      <div className="page-header">
+        <div>
+          <a href="#/customers" className="back-link">
+            ← Customers
+          </a>
+          <h1>{customer.name}</h1>
+          {customer.company && <div className="muted">{customer.company}</div>}
+        </div>
+        <div className="actions">
+          <button className="button" onClick={() => setEditing(true)}>
+            Edit
+          </button>
+          <a className="button" href={`#/estimates/new?customer=${id}`}>
+            New estimate
+          </a>
+          <a className="button primary" href={`#/invoices/new?customer=${id}`}>
+            New invoice
+          </a>
+        </div>
+      </div>
+
+      <div className="stats three">
+        <div className="stat">
+          <div className="stat-label">Billed</div>
+          <div className="stat-value">{formatCents(sumOf(billed.map((d) => d.totalCents)))}</div>
+        </div>
+        <div className="stat">
+          <div className="stat-label">Paid</div>
+          <div className="stat-value">{formatCents(sumOf(billed.map((d) => d.paidCents)))}</div>
+        </div>
+        <div className={`stat ${billed.some((d) => d.status === 'overdue') ? 'danger' : ''}`}>
+          <div className="stat-label">Owes</div>
+          <div className="stat-value">{formatCents(sumOf(billed.map((d) => d.balanceCents)))}</div>
+        </div>
+      </div>
+
+      <div className="view-layout">
+        <section className="card flush">
+          <div className="card-header pad-x">
+            <h2>Invoices and estimates</h2>
+          </div>
+          {theirs.length === 0 ? <p className="muted pad">Nothing yet.</p> : <DocumentTable rows={theirs} showCustomer={false} />}
+        </section>
+        <aside className="card stack-sm">
+          <h2>Contact</h2>
+          {customer.email && <a href={`mailto:${customer.email}`}>{customer.email}</a>}
+          {customer.phone && <a href={`tel:${customer.phone}`}>{customer.phone}</a>}
+          {customer.address && <div className="pre">{customer.address}</div>}
+          {customer.notes && (
+            <div>
+              <div className="field-label">Private notes</div>
+              <div className="pre small">{customer.notes}</div>
+            </div>
+          )}
+        </aside>
+      </div>
+
+      {editing && (
+        <div className="modal-backdrop" onClick={() => setEditing(false)}>
+          <div className="modal" role="dialog" aria-label="Edit customer" onClick={(e) => e.stopPropagation()}>
+            <h2>Edit customer</h2>
+            <CustomerForm
+              customer={customer}
+              onCancel={() => setEditing(false)}
+              onSaved={(saved) => {
+                setCustomer(saved);
+                setEditing(false);
               }}
             />
           </div>

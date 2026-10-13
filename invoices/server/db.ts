@@ -1,6 +1,14 @@
 import { randomBytes } from 'node:crypto';
 import { DatabaseSync } from 'node:sqlite';
-import { addDays, computeTotals, deriveStatus, localDate, type DiscountType } from '../shared/totals.ts';
+import {
+  addDays,
+  computeTotals,
+  depositCents,
+  deriveStatus,
+  formatCents,
+  localDate,
+  type DiscountType,
+} from '../shared/totals.ts';
 import type {
   BusinessSettings,
   CatalogItem,
@@ -9,6 +17,7 @@ import type {
   DocumentDetail,
   DocumentKind,
   DocumentSummary,
+  EventType,
   LineItem,
   Payment,
 } from '../shared/types.ts';
@@ -87,6 +96,28 @@ CREATE TABLE IF NOT EXISTS payments (
   note TEXT NOT NULL DEFAULT ''
 );
 
+CREATE TABLE IF NOT EXISTS events (
+  id INTEGER PRIMARY KEY,
+  document_id INTEGER NOT NULL REFERENCES documents(id) ON DELETE CASCADE,
+  type TEXT NOT NULL,
+  at TEXT NOT NULL DEFAULT (strftime('%Y-%m-%dT%H:%M:%fZ', 'now')),
+  detail TEXT NOT NULL DEFAULT ''
+);
+
+CREATE TABLE IF NOT EXISTS attachments (
+  id INTEGER PRIMARY KEY,
+  document_id INTEGER NOT NULL REFERENCES documents(id) ON DELETE CASCADE,
+  filename TEXT NOT NULL,
+  mime TEXT NOT NULL,
+  data BLOB NOT NULL,
+  width INTEGER NOT NULL DEFAULT 0,
+  height INTEGER NOT NULL DEFAULT 0,
+  caption TEXT NOT NULL DEFAULT '',
+  created_at TEXT NOT NULL DEFAULT (datetime('now'))
+);
+
+CREATE INDEX IF NOT EXISTS idx_events_document ON events(document_id, id);
+CREATE INDEX IF NOT EXISTS idx_attachments_document ON attachments(document_id, id);
 CREATE INDEX IF NOT EXISTS idx_line_items_document ON line_items(document_id, position);
 CREATE INDEX IF NOT EXISTS idx_payments_document ON payments(document_id);
 CREATE INDEX IF NOT EXISTS idx_documents_kind ON documents(kind, issue_date);
@@ -106,7 +137,22 @@ export const DEFAULT_SETTINGS: BusinessSettings = {
   paymentInstructions: '',
   invoicePrefix: 'INV-',
   estimatePrefix: 'EST-',
+  logoDataUrl: '',
+  brandColor: '#1F6F5C',
 };
+
+// Columns added after the first release; older databases get them on open.
+const DOCUMENT_COLUMNS: [string, string][] = [
+  ['deposit_type', "TEXT NOT NULL DEFAULT 'none'"],
+  ['deposit_value', 'INTEGER NOT NULL DEFAULT 0'],
+  ['viewed_at', 'TEXT'],
+  ['view_count', 'INTEGER NOT NULL DEFAULT 0'],
+  ['accepted_name', "TEXT NOT NULL DEFAULT ''"],
+  ['accepted_at', 'TEXT'],
+];
+
+export const MAX_ATTACHMENTS = 12;
+export const MAX_ATTACHMENT_BYTES = 2 * 1024 * 1024;
 
 export class NotFoundError extends Error {}
 export class ConflictError extends Error {}
@@ -124,7 +170,18 @@ export interface DocumentInput {
   discountType: DiscountType;
   discountValue: number;
   taxRateBps: number;
+  depositType: DiscountType;
+  depositValue: number;
   lines: LineItem[];
+}
+
+export interface AttachmentInput {
+  filename: string;
+  mime: string;
+  data: Uint8Array;
+  width: number;
+  height: number;
+  caption: string;
 }
 
 export type CustomerInput = Omit<Customer, 'id' | 'createdAt'>;
@@ -137,6 +194,23 @@ export class Store {
   constructor(path: string) {
     this.db = new DatabaseSync(path);
     this.db.exec(SCHEMA);
+    this.migrate();
+  }
+
+  private migrate() {
+    const existing = new Set(
+      (this.db.prepare(`PRAGMA table_info(documents)`).all() as Row[]).map((column) => column.name),
+    );
+
+    for (const [name, definition] of DOCUMENT_COLUMNS) {
+      if (!existing.has(name)) {
+        this.db.exec(`ALTER TABLE documents ADD COLUMN ${name} ${definition}`);
+      }
+    }
+  }
+
+  private logEvent(documentId: number, type: EventType, detail = '') {
+    this.db.prepare(`INSERT INTO events (document_id, type, detail) VALUES (?, ?, ?)`).run(documentId, type, detail);
   }
 
   close() {
@@ -297,8 +371,9 @@ export class Store {
       const result = this.db
         .prepare(
           `INSERT INTO documents (kind, number, state, customer_id, title, service_address, issue_date, due_date,
-             notes, terms, discount_type, discount_value, tax_rate_bps, public_token, source_estimate_id)
-           VALUES (?, ?, 'draft', ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+             notes, terms, discount_type, discount_value, tax_rate_bps, deposit_type, deposit_value, public_token,
+             source_estimate_id)
+           VALUES (?, ?, 'draft', ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
         )
         .run(
           kind,
@@ -313,12 +388,15 @@ export class Store {
           input.discountType,
           input.discountValue,
           input.taxRateBps,
+          input.depositType,
+          input.depositValue,
           randomBytes(18).toString('base64url'),
           sourceEstimateId,
         );
       const id = Number(result.lastInsertRowid);
 
       this.replaceLines(id, input.lines);
+      this.logEvent(id, 'created');
 
       return this.getDocument(id);
     });
@@ -339,7 +417,8 @@ export class Store {
       this.db
         .prepare(
           `UPDATE documents SET customer_id = ?, title = ?, service_address = ?, issue_date = ?, due_date = ?,
-             notes = ?, terms = ?, discount_type = ?, discount_value = ?, tax_rate_bps = ?, updated_at = datetime('now')
+             notes = ?, terms = ?, discount_type = ?, discount_value = ?, tax_rate_bps = ?, deposit_type = ?,
+             deposit_value = ?, updated_at = datetime('now')
            WHERE id = ?`,
         )
         .run(
@@ -353,6 +432,8 @@ export class Store {
           input.discountType,
           input.discountValue,
           input.taxRateBps,
+          input.depositType,
+          input.depositValue,
           id,
         );
       this.replaceLines(id, input.lines);
@@ -393,7 +474,7 @@ export class Store {
     this.db.prepare(`DELETE FROM documents WHERE id = ?`).run(id);
   }
 
-  setState(id: number, state: string): DocumentDetail {
+  setState(id: number, state: string, acceptedName = ''): DocumentDetail {
     const doc = this.getDocument(id);
     const allowed: Record<string, string[]> = {
       invoice: ['sent', 'void'],
@@ -412,11 +493,22 @@ export class Store {
       throw new ConflictError('Remove recorded payments before voiding this invoice');
     }
 
+    if (doc.state === state) {
+      return doc;
+    }
+
     const sentAt = state === 'sent' ? (doc.sentAt ?? new Date().toISOString()) : doc.sentAt;
+    const accepted = state === 'accepted';
 
     this.db
-      .prepare(`UPDATE documents SET state = ?, sent_at = ?, updated_at = datetime('now') WHERE id = ?`)
-      .run(state, sentAt, id);
+      .prepare(
+        `UPDATE documents SET state = ?, sent_at = ?, accepted_name = ?, accepted_at = ?, updated_at = datetime('now')
+         WHERE id = ?`,
+      )
+      .run(state, sentAt, accepted ? acceptedName : '', accepted ? new Date().toISOString() : null, id);
+
+    const eventType: Record<string, EventType> = { sent: 'sent', void: 'voided', accepted: 'accepted', declined: 'declined' };
+    this.logEvent(id, eventType[state], accepted && acceptedName ? `Signed by ${acceptedName}` : '');
 
     return this.getDocument(id);
   }
@@ -449,8 +541,17 @@ export class Store {
       this.db
         .prepare(`UPDATE documents SET state = 'converted', converted_to_id = ?, updated_at = datetime('now') WHERE id = ?`)
         .run(invoice.id, estimate.id);
+      // Job photos follow the work from the estimate to the invoice.
+      this.db
+        .prepare(
+          `INSERT INTO attachments (document_id, filename, mime, data, width, height, caption)
+           SELECT ?, filename, mime, data, width, height, caption FROM attachments WHERE document_id = ? ORDER BY id`,
+        )
+        .run(invoice.id, estimate.id);
+      this.logEvent(estimate.id, 'converted', `Invoice ${invoice.number}`);
+      this.logEvent(invoice.id, 'converted', `From estimate ${estimate.number}`);
 
-      return invoice;
+      return this.getDocument(invoice.id);
     });
   }
 
@@ -484,6 +585,7 @@ export class Store {
     this.db
       .prepare(`INSERT INTO payments (document_id, amount_cents, method, paid_at, note) VALUES (?, ?, ?, ?, ?)`)
       .run(documentId, input.amountCents, input.method, input.paidAt, input.note);
+    this.logEvent(documentId, 'payment', `${formatCents(input.amountCents)} by ${METHOD_NAMES[input.method] ?? input.method}`);
 
     // Recording a payment on a draft means it was delivered outside the app.
     if (doc.state === 'draft') {
@@ -494,13 +596,138 @@ export class Store {
   }
 
   deletePayment(documentId: number, paymentId: number): DocumentDetail {
-    const result = this.db.prepare(`DELETE FROM payments WHERE id = ? AND document_id = ?`).run(paymentId, documentId);
+    const payment = this.db
+      .prepare(`SELECT amount_cents FROM payments WHERE id = ? AND document_id = ?`)
+      .get(paymentId, documentId) as Row | undefined;
 
-    if (result.changes === 0) {
+    if (!payment) {
       throw new NotFoundError('Payment not found');
     }
 
+    this.db.prepare(`DELETE FROM payments WHERE id = ?`).run(paymentId);
+    this.logEvent(documentId, 'payment_removed', formatCents(payment.amount_cents));
+
     return this.getDocument(documentId);
+  }
+
+  // Customer views. Owner previews pass countView = false so they don't count.
+  recordView(token: string, countView: boolean): DocumentDetail {
+    const doc = this.getDocumentByToken(token);
+
+    if (!countView) {
+      return doc;
+    }
+
+    const now = new Date().toISOString();
+    this.db
+      .prepare(`UPDATE documents SET view_count = view_count + 1, viewed_at = COALESCE(viewed_at, ?) WHERE id = ?`)
+      .run(now, doc.id);
+
+    // Log the first view and then at most one view a day, so the activity list stays readable.
+    const last = this.db
+      .prepare(`SELECT at FROM events WHERE document_id = ? AND type = 'viewed' ORDER BY id DESC LIMIT 1`)
+      .get(doc.id) as Row | undefined;
+
+    if (!last || Date.parse(now) - Date.parse(last.at) > 24 * 60 * 60 * 1000) {
+      this.logEvent(doc.id, 'viewed', last ? '' : 'First view');
+    }
+
+    return this.getDocument(doc.id);
+  }
+
+  // Photos and other images attached to an invoice or estimate.
+
+  addAttachment(documentId: number, input: AttachmentInput): DocumentDetail {
+    const doc = this.getDocument(documentId);
+
+    if (doc.attachments.length >= MAX_ATTACHMENTS) {
+      throw new ConflictError(`Up to ${MAX_ATTACHMENTS} photos can be attached`);
+    }
+
+    this.db
+      .prepare(
+        `INSERT INTO attachments (document_id, filename, mime, data, width, height, caption) VALUES (?, ?, ?, ?, ?, ?, ?)`,
+      )
+      .run(documentId, input.filename, input.mime, input.data, input.width, input.height, input.caption);
+
+    return this.getDocument(documentId);
+  }
+
+  getAttachment(documentId: number, attachmentId: number): { mime: string; data: Uint8Array } {
+    const row = this.db
+      .prepare(`SELECT mime, data FROM attachments WHERE id = ? AND document_id = ?`)
+      .get(attachmentId, documentId) as Row | undefined;
+
+    if (!row) {
+      throw new NotFoundError('Photo not found');
+    }
+
+    return { mime: row.mime, data: row.data };
+  }
+
+  updateAttachment(documentId: number, attachmentId: number, caption: string): DocumentDetail {
+    const result = this.db
+      .prepare(`UPDATE attachments SET caption = ? WHERE id = ? AND document_id = ?`)
+      .run(caption, attachmentId, documentId);
+
+    if (result.changes === 0) {
+      throw new NotFoundError('Photo not found');
+    }
+
+    return this.getDocument(documentId);
+  }
+
+  deleteAttachment(documentId: number, attachmentId: number): DocumentDetail {
+    const result = this.db.prepare(`DELETE FROM attachments WHERE id = ? AND document_id = ?`).run(attachmentId, documentId);
+
+    if (result.changes === 0) {
+      throw new NotFoundError('Photo not found');
+    }
+
+    return this.getDocument(documentId);
+  }
+
+  // Spreadsheet exports for bookkeeping.
+
+  exportInvoicesCsv(today = localDate()): string {
+    const header = ['Number', 'Customer', 'Title', 'Issued', 'Due', 'Status', 'Subtotal', 'Discount', 'Tax', 'Total', 'Paid', 'Balance'];
+    const rows = (this.db.prepare(`SELECT * FROM documents WHERE kind = 'invoice' ORDER BY issue_date, id`).all() as Row[]).map(
+      (row) => {
+        const doc = this.hydrate(row, today);
+
+        return [
+          doc.number,
+          doc.customerName,
+          doc.title,
+          doc.issueDate,
+          doc.dueDate ?? '',
+          doc.status,
+          dollars(doc.totals.subtotalCents),
+          dollars(doc.totals.discountCents),
+          dollars(doc.totals.taxCents),
+          dollars(doc.totalCents),
+          dollars(doc.paidCents),
+          dollars(doc.balanceCents),
+        ];
+      },
+    );
+
+    return toCsv([header, ...rows]);
+  }
+
+  exportPaymentsCsv(): string {
+    const rows = this.db
+      .prepare(
+        `SELECT p.paid_at, d.number, COALESCE(NULLIF(c.company, ''), c.name, '') AS customer, p.method, p.amount_cents, p.note
+         FROM payments p JOIN documents d ON d.id = p.document_id LEFT JOIN customers c ON c.id = d.customer_id
+         ORDER BY p.paid_at, p.id`,
+      )
+      .all() as Row[];
+
+    return toCsv([
+      ['Date', 'Invoice', 'Customer', 'Method', 'Amount', 'Note'],
+      ...rows.map((r) => [r.paid_at, r.number, r.customer, METHOD_NAMES[r.method] ?? r.method, dollars(r.amount_cents), r.note]),
+    ]);
   }
 
   getDocument(id: number): DocumentDetail {
@@ -568,6 +795,21 @@ export class Store {
     const customer = row.customer_id
       ? toCustomerOrNull(this.db.prepare(`SELECT * FROM customers WHERE id = ?`).get(row.customer_id) as Row)
       : null;
+    const events = (
+      this.db.prepare(`SELECT id, type, at, detail FROM events WHERE document_id = ? ORDER BY id`).all(row.id) as Row[]
+    ).map((e) => ({ id: e.id, type: e.type, at: e.at, detail: e.detail }));
+    const attachments = (
+      this.db
+        .prepare(`SELECT id, filename, caption, width, height FROM attachments WHERE document_id = ? ORDER BY id`)
+        .all(row.id) as Row[]
+    ).map((a) => ({
+      id: a.id,
+      filename: a.filename,
+      caption: a.caption,
+      width: a.width,
+      height: a.height,
+      url: `/api/documents/${row.id}/attachments/${a.id}`,
+    }));
     const totals = computeTotals({
       lines,
       discountType: row.discount_type,
@@ -583,6 +825,8 @@ export class Store {
       paidCents,
       today,
     });
+
+    const deposit = depositCents(row.deposit_type, row.deposit_value, totals.totalCents);
 
     return {
       id: row.id,
@@ -602,8 +846,18 @@ export class Store {
       discountType: row.discount_type,
       discountValue: row.discount_value,
       taxRateBps: row.tax_rate_bps,
+      depositType: row.deposit_type,
+      depositValue: row.deposit_value,
+      depositCents: deposit,
+      depositDueCents: row.state === 'void' ? 0 : Math.max(0, deposit - paidCents),
+      viewedAt: row.viewed_at,
+      viewCount: row.view_count,
+      acceptedName: row.accepted_name,
+      acceptedAt: row.accepted_at,
       lines,
       payments,
+      events,
+      attachments,
       totals,
       totalCents: totals.totalCents,
       paidCents,
@@ -630,6 +884,8 @@ function documentInputFrom(doc: DocumentDetail): DocumentInput {
     discountType: doc.discountType,
     discountValue: doc.discountValue,
     taxRateBps: doc.taxRateBps,
+    depositType: doc.depositType,
+    depositValue: doc.depositValue,
     lines: doc.lines.map(({ id: _id, ...line }) => line),
   };
 }
@@ -648,7 +904,33 @@ function summarize(doc: DocumentDetail): DocumentSummary {
     totalCents: doc.totalCents,
     paidCents: doc.paidCents,
     balanceCents: doc.balanceCents,
+    viewedAt: doc.viewedAt,
   };
+}
+
+const METHOD_NAMES: Record<string, string> = {
+  cash: 'cash',
+  check: 'check',
+  card: 'card',
+  bank_transfer: 'bank transfer',
+  other: 'other',
+};
+
+function dollars(cents: number): string {
+  return (cents / 100).toFixed(2);
+}
+
+function toCsv(rows: (string | number)[][]): string {
+  const cell = (value: string | number) => {
+    const text = String(value);
+
+    // Quote when needed, and neutralize leading formula characters so spreadsheets don't execute them.
+    const safe = /^[=+\-@\t\r]/.test(text) && !/^-?\d/.test(text) ? `'${text}` : text;
+
+    return /[",\n\r]/.test(safe) ? `"${safe.replace(/"/g, '""')}"` : safe;
+  };
+
+  return rows.map((row) => row.map(cell).join(',')).join('\r\n') + '\r\n';
 }
 
 function sum(values: number[]): number {

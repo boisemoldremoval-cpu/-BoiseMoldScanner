@@ -3,6 +3,7 @@ import type { BusinessSettings } from '../../shared/types.ts';
 import { put } from '../api.ts';
 import { Field, bpsFromPercent, percentFromBps } from '../components.tsx';
 import { useFetch } from '../hooks.ts';
+import { resizeImage } from '../images.ts';
 
 export function Settings() {
   const { data, error } = useFetch<BusinessSettings>('/settings');
@@ -88,6 +89,63 @@ export function Settings() {
         <Field label="Address">
           <textarea rows={2} {...text('address')} />
         </Field>
+      </section>
+
+      <section className="card stack-sm">
+        <h2>Branding</h2>
+        <p className="muted small">Your logo and color appear on invoices, estimates and the customer's page.</p>
+        <div className="brand-row">
+          <div className="logo-preview">
+            {form.logoDataUrl ? <img src={form.logoDataUrl} alt="Logo" /> : <span className="muted small">No logo</span>}
+          </div>
+          <div className="stack-sm">
+            <div className="row wrap">
+              <label className="button file-button">
+                {form.logoDataUrl ? 'Replace logo' : 'Upload logo'}
+                <input
+                  type="file"
+                  accept="image/png,image/jpeg,image/webp"
+                  onChange={async (e) => {
+                    const file = e.target.files?.[0];
+                    e.target.value = '';
+
+                    if (!file) {
+                      return;
+                    }
+
+                    try {
+                      setSaveError(null);
+                      const image = await resizeImage(file, 600, 'image/png');
+                      setStatus(null);
+                      setForm({ ...form, logoDataUrl: image.dataUrl });
+                    } catch (err) {
+                      setSaveError(err instanceof Error ? err.message : String(err));
+                    }
+                  }}
+                />
+              </label>
+              {form.logoDataUrl && (
+                <button type="button" className="button" onClick={() => setForm({ ...form, logoDataUrl: '' })}>
+                  Remove
+                </button>
+              )}
+            </div>
+            <Field label="Brand color">
+              <div className="row color-row">
+                <input
+                  type="color"
+                  aria-label="Pick brand color"
+                  value={form.brandColor}
+                  onChange={(e) => {
+                    setStatus(null);
+                    setForm({ ...form, brandColor: e.target.value.toUpperCase() });
+                  }}
+                />
+                <input {...text('brandColor')} aria-label="Brand color hex value" />
+              </div>
+            </Field>
+          </div>
+        </div>
       </section>
 
       <section className="card stack-sm">

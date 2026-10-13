@@ -2,6 +2,7 @@ import type { AddressInfo } from 'node:net';
 import type { Server } from 'node:http';
 import { afterEach, beforeEach, describe, expect, it } from 'vitest';
 import { createApp } from '../server/app.ts';
+import { DatabaseSync } from 'node:sqlite';
 import { Store } from '../server/db.ts';
 
 let server: Server;
@@ -54,6 +55,8 @@ const invoiceBody = (customerId: number | null, extra: Record<string, unknown> =
 afterEach(() => {
   server?.close();
   store?.close();
+  server = undefined as unknown as Server;
+  store = undefined as unknown as Store;
 });
 
 describe('invoice lifecycle', () => {
@@ -176,8 +179,12 @@ describe('customer link', () => {
     await call('POST', `/documents/${estimate.body.id}/state`, { state: 'sent' });
     const token = estimate.body.publicToken;
 
-    const accepted = await call('POST', `/public/${token}/respond`, { response: 'accepted' });
-    expect(accepted.body.document.status).toBe('accepted');
+    expect((await call('POST', `/public/${token}/respond`, { response: 'accepted' })).status).toBe(400);
+    expect((await call('POST', `/public/${token}/respond`, { response: 'accepted', name: ' ' })).status).toBe(400);
+
+    const accepted = await call('POST', `/public/${token}/respond`, { response: 'accepted', name: 'Jane Doe' });
+    expect(accepted.body.document).toMatchObject({ status: 'accepted', acceptedName: 'Jane Doe' });
+    expect(accepted.body.document.acceptedAt).toBeTruthy();
     expect((await call('POST', `/public/${token}/respond`, { response: 'declined' })).status).toBe(409);
   });
 });
@@ -199,5 +206,192 @@ describe('password protection', () => {
     await call('POST', '/logout');
     expect((await call('GET', '/dashboard')).status).toBe(401);
     expect((await call('GET', `/public/${doc.body.publicToken}`)).status).toBe(200);
+  });
+});
+
+// A 1x1 transparent PNG.
+const PNG = 'iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mNkYAAAAAYAAjCB0C8AAAAASUVORK5CYII=';
+
+describe('deposits', () => {
+  beforeEach(() => start());
+
+  it('tracks how much of a requested deposit is still due', async () => {
+    const doc = await call('POST', '/documents', invoiceBody(null, { depositType: 'percent', depositValue: 5000 }));
+    // Half of $2,158.00.
+    expect(doc.body).toMatchObject({ depositCents: 107900, depositDueCents: 107900 });
+
+    await call('POST', `/documents/${doc.body.id}/state`, { state: 'sent' });
+    const paid = await call('POST', `/documents/${doc.body.id}/payments`, {
+      amountCents: 50000,
+      method: 'card',
+      paidAt: '2099-05-02',
+      note: '',
+    });
+    expect(paid.body.depositDueCents).toBe(57900);
+
+    expect((await call('POST', '/documents', invoiceBody(null, { depositType: 'percent', depositValue: 20000 }))).status).toBe(400);
+  });
+
+  it('carries the deposit from an estimate to its invoice', async () => {
+    const estimate = await call('POST', '/documents', {
+      ...invoiceBody(null),
+      kind: 'estimate',
+      depositType: 'amount',
+      depositValue: 50000,
+    });
+    const invoice = await call('POST', `/documents/${estimate.body.id}/convert`);
+
+    expect(invoice.body).toMatchObject({ depositType: 'amount', depositCents: 50000 });
+  });
+});
+
+describe('activity and views', () => {
+  beforeEach(() => start());
+
+  it('records customer views but not owner previews', async () => {
+    const doc = await call('POST', '/documents', invoiceBody(null));
+    await call('POST', `/documents/${doc.body.id}/state`, { state: 'sent' });
+    const token = doc.body.publicToken;
+
+    await call('GET', `/public/${token}?preview=1`);
+    expect((await call('GET', `/documents/${doc.body.id}`)).body).toMatchObject({ viewCount: 0, viewedAt: null });
+
+    await call('GET', `/public/${token}`);
+    await call('GET', `/public/${token}`);
+    const viewed = (await call('GET', `/documents/${doc.body.id}`)).body;
+
+    expect(viewed.viewCount).toBe(2);
+    expect(viewed.viewedAt).toBeTruthy();
+    // Repeat views on the same day are counted but logged once.
+    expect(viewed.events.map((e: { type: string }) => e.type)).toEqual(['created', 'sent', 'viewed']);
+    expect((await call('GET', '/documents?kind=invoice')).body[0].viewedAt).toBeTruthy();
+  });
+
+  it('logs payments and keeps the log away from customers', async () => {
+    const doc = await call('POST', '/documents', invoiceBody(null));
+    await call('POST', `/documents/${doc.body.id}/state`, { state: 'sent' });
+    const paid = await call('POST', `/documents/${doc.body.id}/payments`, {
+      amountCents: 10000,
+      method: 'bank_transfer',
+      paidAt: '2099-05-02',
+      note: '',
+    });
+
+    expect(paid.body.events.at(-1)).toMatchObject({ type: 'payment', detail: '$100.00 by bank transfer' });
+    expect((await call('GET', `/public/${doc.body.publicToken}`)).body.document.events).toEqual([]);
+  });
+});
+
+describe('photos', () => {
+  beforeEach(() => start());
+
+  it('attaches photos and serves them to customers only through their link', async () => {
+    const doc = await call('POST', '/documents', invoiceBody(null));
+    const added = await call('POST', `/documents/${doc.body.id}/attachments`, {
+      filename: 'before.png',
+      caption: 'Before',
+      width: 1,
+      height: 1,
+      dataUrl: `data:image/png;base64,${PNG}`,
+    });
+    expect(added.status).toBe(201);
+
+    const photo = added.body.attachments[0];
+    const image = await fetch(base.replace('/api', '') + photo.url);
+    expect(image.headers.get('content-type')).toBe('image/png');
+    expect(Buffer.from(await image.arrayBuffer()).toString('base64')).toBe(PNG);
+
+    // Drafts aren't public, so neither are their photos.
+    const token = doc.body.publicToken;
+    expect((await fetch(`${base}/public/${token}/attachments/${photo.id}`)).status).toBe(404);
+
+    await call('POST', `/documents/${doc.body.id}/state`, { state: 'sent' });
+    const publicDoc = (await call('GET', `/public/${token}`)).body.document;
+    expect(publicDoc.attachments[0].url).toBe(`/api/public/${token}/attachments/${photo.id}`);
+    expect((await fetch(base.replace('/api', '') + publicDoc.attachments[0].url)).status).toBe(200);
+
+    const estimate = await call('POST', '/documents', { ...invoiceBody(null), kind: 'estimate' });
+    await call('POST', `/documents/${estimate.body.id}/attachments`, {
+      filename: 'job.png',
+      caption: 'Crawlspace',
+      width: 1,
+      height: 1,
+      dataUrl: `data:image/png;base64,${PNG}`,
+    });
+    const converted = await call('POST', `/documents/${estimate.body.id}/convert`);
+    expect(converted.body.attachments).toMatchObject([{ caption: 'Crawlspace', filename: 'job.png' }]);
+
+    const captioned = await call('PUT', `/documents/${doc.body.id}/attachments/${photo.id}`, { caption: 'After' });
+    expect(captioned.body.attachments[0].caption).toBe('After');
+    expect((await call('DELETE', `/documents/${doc.body.id}/attachments/${photo.id}`)).body.attachments).toEqual([]);
+  });
+
+  it('rejects files that are not images', async () => {
+    const doc = await call('POST', '/documents', invoiceBody(null));
+    const bad = await call('POST', `/documents/${doc.body.id}/attachments`, {
+      filename: 'x.html',
+      caption: '',
+      width: 1,
+      height: 1,
+      dataUrl: 'data:text/html;base64,PGgxPmhpPC9oMT4=',
+    });
+
+    expect(bad.status).toBe(400);
+  });
+});
+
+describe('settings and exports', () => {
+  beforeEach(() => start());
+
+  it('validates the logo and brand color', async () => {
+    const settings = (await call('GET', '/settings')).body;
+
+    expect((await call('PUT', '/settings', { ...settings, brandColor: 'red' })).status).toBe(400);
+    expect((await call('PUT', '/settings', { ...settings, logoDataUrl: 'javascript:alert(1)' })).status).toBe(400);
+
+    const saved = await call('PUT', '/settings', { ...settings, brandColor: '#123ABC', logoDataUrl: `data:image/png;base64,${PNG}` });
+    expect(saved.body).toMatchObject({ brandColor: '#123ABC' });
+  });
+
+  it('exports invoices and payments as CSV', async () => {
+    const customer = await call('POST', '/customers', { name: '=HYPERLINK("x")', company: 'Smith, Jones & Co' });
+    const doc = await call('POST', '/documents', invoiceBody(customer.body.id));
+    await call('POST', `/documents/${doc.body.id}/state`, { state: 'sent' });
+    await call('POST', `/documents/${doc.body.id}/payments`, { amountCents: 15800, method: 'check', paidAt: '2099-05-03', note: '#77' });
+
+    const invoices = await (await fetch(`${base}/export/invoices.csv`)).text();
+    expect(invoices.split('\r\n')[0]).toBe('Number,Customer,Title,Issued,Due,Status,Subtotal,Discount,Tax,Total,Paid,Balance');
+    expect(invoices).toContain('INV-0001,"Smith, Jones & Co",Crawlspace remediation,2099-05-01,2099-05-15,partial,2050.00,0.00,108.00,2158.00,158.00,2000.00');
+
+    const payments = await (await fetch(`${base}/export/payments.csv`)).text();
+    expect(payments).toContain('2099-05-03,INV-0001,"Smith, Jones & Co",check,158.00,#77');
+  });
+
+  it('neutralizes spreadsheet formulas in exported text', async () => {
+    const customer = await call('POST', '/customers', { name: '=HYPERLINK("x")' });
+    await call('POST', '/documents', invoiceBody(customer.body.id));
+
+    expect(await (await fetch(`${base}/export/invoices.csv`)).text()).toContain(`"'=HYPERLINK(""x"")"`);
+  });
+});
+
+describe('upgrading an existing database', () => {
+  it('adds the new columns to a database created before them', async () => {
+    const dir = await import('node:os').then((os) => os.tmpdir());
+    const path = `${dir}/invoices-migrate-${Date.now()}.db`;
+    const old = new DatabaseSync(path);
+    old.exec(`CREATE TABLE documents (
+      id INTEGER PRIMARY KEY, kind TEXT NOT NULL, number TEXT NOT NULL, state TEXT NOT NULL, customer_id INTEGER,
+      title TEXT NOT NULL DEFAULT '', service_address TEXT NOT NULL DEFAULT '', issue_date TEXT NOT NULL, due_date TEXT,
+      notes TEXT NOT NULL DEFAULT '', terms TEXT NOT NULL DEFAULT '', discount_type TEXT NOT NULL DEFAULT 'none',
+      discount_value INTEGER NOT NULL DEFAULT 0, tax_rate_bps INTEGER NOT NULL DEFAULT 0, public_token TEXT NOT NULL UNIQUE,
+      sent_at TEXT, converted_to_id INTEGER, source_estimate_id INTEGER,
+      created_at TEXT NOT NULL DEFAULT (datetime('now')), updated_at TEXT NOT NULL DEFAULT (datetime('now')));
+      INSERT INTO documents (kind, number, state, issue_date, public_token) VALUES ('invoice', 'INV-0001', 'sent', '2099-01-01', 'tok');`);
+    old.close();
+
+    const upgraded = new Store(path);
+    expect(upgraded.getDocument(1)).toMatchObject({ number: 'INV-0001', depositType: 'none', viewCount: 0, events: [] });
+    upgraded.close();
   });
 });

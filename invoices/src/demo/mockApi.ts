@@ -3,15 +3,18 @@
  * (`pnpm build:demo`). It mirrors server/db.ts and server/app.ts closely
  * enough to click through every screen, and keeps data in localStorage.
  */
-import { addDays, computeTotals, deriveStatus, localDate } from '../../shared/totals.ts';
+import { addDays, computeTotals, depositCents, deriveStatus, formatCents, localDate } from '../../shared/totals.ts';
 import type {
+  Attachment,
   BusinessSettings,
   CatalogItem,
   Customer,
   Dashboard,
   DocumentDetail,
   DocumentKind,
+  DocumentEvent,
   DocumentSummary,
+  EventType,
   LineItem,
   Payment,
 } from '../../shared/types.ts';
@@ -40,6 +43,14 @@ interface StoredDocument {
   discountType: 'none' | 'percent' | 'amount';
   discountValue: number;
   taxRateBps: number;
+  depositType: 'none' | 'percent' | 'amount';
+  depositValue: number;
+  viewedAt: string | null;
+  viewCount: number;
+  acceptedName: string;
+  acceptedAt: string | null;
+  events: DocumentEvent[];
+  attachments: Attachment[];
   publicToken: string;
   sentAt: string | null;
   convertedToId: number | null;
@@ -58,7 +69,7 @@ interface DemoData {
   documents: StoredDocument[];
 }
 
-const STORAGE_KEY = 'invoices-demo-v1';
+const STORAGE_KEY = 'invoices-demo-v2';
 
 function load(): DemoData {
   try {
@@ -103,13 +114,22 @@ function nextNumber(kind: DocumentKind) {
   return `${prefix}${String(max + 1).padStart(4, '0')}`;
 }
 
+function logEvent(doc: StoredDocument, type: EventType, detail = '') {
+  doc.events.push({ id: data.nextId++, type, at: nowIso(), detail });
+}
+
 function hydrate(doc: StoredDocument, today = localDate()): DocumentDetail {
   const customer = data.customers.find((c) => c.id === doc.customerId) ?? null;
   const totals = computeTotals(doc);
   const paidCents = sum(doc.payments.map((p) => p.amountCents));
+  const deposit = depositCents(doc.depositType, doc.depositValue, totals.totalCents);
 
   return {
     ...doc,
+    events: doc.events.map((e) => ({ ...e })),
+    attachments: doc.attachments.map((a) => ({ ...a })),
+    depositCents: deposit,
+    depositDueCents: doc.state === 'void' ? 0 : Math.max(0, deposit - paidCents),
     lines: doc.lines.map((line) => ({ ...line })),
     payments: [...doc.payments].sort((a, b) => (a.paidAt < b.paidAt ? -1 : 1)),
     customer,
@@ -123,9 +143,9 @@ function hydrate(doc: StoredDocument, today = localDate()): DocumentDetail {
 }
 
 function summarize(d: DocumentDetail): DocumentSummary {
-  const { id, kind, number, title, customerId, customerName, issueDate, dueDate, status, totalCents, paidCents, balanceCents } = d;
+  const { id, kind, number, title, customerId, customerName, issueDate, dueDate, status, totalCents, paidCents, balanceCents, viewedAt } = d;
 
-  return { id, kind, number, title, customerId, customerName, issueDate, dueDate, status, totalCents, paidCents, balanceCents };
+  return { id, kind, number, title, customerId, customerName, issueDate, dueDate, status, totalCents, paidCents, balanceCents, viewedAt };
 }
 
 function findDoc(id: number) {
@@ -140,7 +160,19 @@ function findDoc(id: number) {
 
 type DocInput = Pick<
   StoredDocument,
-  'customerId' | 'title' | 'serviceAddress' | 'issueDate' | 'dueDate' | 'notes' | 'terms' | 'discountType' | 'discountValue' | 'taxRateBps' | 'lines'
+  | 'customerId'
+  | 'title'
+  | 'serviceAddress'
+  | 'issueDate'
+  | 'dueDate'
+  | 'notes'
+  | 'terms'
+  | 'discountType'
+  | 'discountValue'
+  | 'taxRateBps'
+  | 'depositType'
+  | 'depositValue'
+  | 'lines'
 >;
 
 function validateDoc(input: DocInput) {
@@ -154,6 +186,10 @@ function validateDoc(input: DocInput) {
 
   if (input.discountType === 'percent' && input.discountValue > 10000) {
     throw new ApiError(400, 'Discount cannot exceed 100%');
+  }
+
+  if (input.depositType === 'percent' && input.depositValue > 10000) {
+    throw new ApiError(400, 'Deposit cannot exceed 100%');
   }
 }
 
@@ -173,9 +209,16 @@ function createDoc(kind: DocumentKind, input: DocInput, sourceEstimateId: number
     createdAt: nowIso(),
     updatedAt: nowIso(),
     payments: [],
+    viewedAt: null,
+    viewCount: 0,
+    acceptedName: '',
+    acceptedAt: null,
+    events: [],
+    attachments: [],
   };
 
   data.documents.push(doc);
+  logEvent(doc, 'created');
 
   return doc;
 }
@@ -192,6 +235,8 @@ function pickDocInput(input: DocInput): DocInput {
     discountType: input.discountType,
     discountValue: input.discountValue,
     taxRateBps: input.taxRateBps,
+    depositType: input.depositType ?? 'none',
+    depositValue: input.depositValue ?? 0,
     lines: input.lines.map(({ name, description, quantity, unit, unitPriceCents, taxable }) => ({
       name,
       description,
@@ -203,7 +248,7 @@ function pickDocInput(input: DocInput): DocInput {
   };
 }
 
-function setState(doc: StoredDocument, state: string) {
+function setState(doc: StoredDocument, state: string, acceptedName = '') {
   const allowed: Record<string, string[]> = { invoice: ['sent', 'void'], estimate: ['sent', 'accepted', 'declined'] };
 
   if (!allowed[doc.kind].includes(state)) {
@@ -218,9 +263,18 @@ function setState(doc: StoredDocument, state: string) {
     throw conflict('Remove recorded payments before voiding this invoice');
   }
 
+  if (doc.state === state) {
+    return;
+  }
+
   doc.state = state;
   doc.sentAt = state === 'sent' ? (doc.sentAt ?? nowIso()) : doc.sentAt;
+  doc.acceptedName = state === 'accepted' ? acceptedName : '';
+  doc.acceptedAt = state === 'accepted' ? nowIso() : null;
   doc.updatedAt = nowIso();
+
+  const eventType: Record<string, EventType> = { sent: 'sent', void: 'voided', accepted: 'accepted', declined: 'declined' };
+  logEvent(doc, eventType[state], state === 'accepted' && acceptedName ? `Signed by ${acceptedName}` : '');
 }
 
 function dashboard(): Dashboard {
@@ -267,6 +321,15 @@ function route(method: string, path: string, body: any): unknown {
       case 'GET dashboard':
         return dashboard();
 
+      case 'GET customers/:id': {
+        const customer = data.customers.find((c) => c.id === id);
+
+        if (!customer) {
+          throw notFound('Customer not found');
+        }
+
+        return customer;
+      }
       case 'GET customers':
         return [...data.customers].sort((a, b) => a.name.localeCompare(b.name));
       case 'POST customers': {
@@ -369,6 +432,9 @@ function route(method: string, path: string, body: any): unknown {
         );
         estimate.state = 'converted';
         estimate.convertedToId = invoice.id;
+        invoice.attachments = estimate.attachments.map((a) => ({ ...a, id: data.nextId++ }));
+        logEvent(estimate, 'converted', `Invoice ${invoice.number}`);
+        logEvent(invoice, 'converted', `From estimate ${estimate.number}`);
         return hydrate(invoice);
       }
       case 'POST documents/:id/duplicate': {
@@ -399,6 +465,7 @@ function route(method: string, path: string, body: any): unknown {
         }
 
         doc.payments.push({ ...body, id: data.nextId++ });
+        logEvent(doc, 'payment', `${formatCents(body.amountCents)} by ${body.method === 'bank_transfer' ? 'bank transfer' : body.method}`);
 
         if (doc.state === 'draft') {
           setState(doc, 'sent');
@@ -408,7 +475,52 @@ function route(method: string, path: string, body: any): unknown {
       }
       case 'DELETE documents/:id/payments/:sub': {
         const doc = findDoc(id);
-        doc.payments = doc.payments.filter((p) => p.id !== Number(parts[3]));
+        const payment = doc.payments.find((p) => p.id === Number(parts[3]));
+
+        if (!payment) {
+          throw notFound('Payment not found');
+        }
+
+        doc.payments = doc.payments.filter((p) => p !== payment);
+        logEvent(doc, 'payment_removed', formatCents(payment.amountCents));
+        return hydrate(doc);
+      }
+      case 'POST documents/:id/attachments': {
+        const doc = findDoc(id);
+
+        if (doc.attachments.length >= 12) {
+          throw conflict('Up to 12 photos can be attached');
+        }
+
+        if (!/^data:image\/(jpeg|png|webp);base64,/.test(body.dataUrl ?? '')) {
+          throw new ApiError(400, 'Photos must be JPEG, PNG or WebP');
+        }
+
+        doc.attachments.push({
+          id: data.nextId++,
+          filename: body.filename,
+          caption: body.caption ?? '',
+          width: body.width,
+          height: body.height,
+          url: body.dataUrl,
+        });
+        return hydrate(doc);
+      }
+      case 'PUT documents/:id/attachments/:sub':
+      case 'DELETE documents/:id/attachments/:sub': {
+        const doc = findDoc(id);
+        const photo = doc.attachments.find((a) => a.id === Number(parts[3]));
+
+        if (!photo) {
+          throw notFound('Photo not found');
+        }
+
+        if (method === 'PUT') {
+          photo.caption = body.caption ?? '';
+        } else {
+          doc.attachments = doc.attachments.filter((a) => a !== photo);
+        }
+
         return hydrate(doc);
       }
 
@@ -425,13 +537,26 @@ function route(method: string, path: string, body: any): unknown {
             throw conflict('This estimate is no longer awaiting a response');
           }
 
-          setState(doc, body.response);
+          if (body.response === 'accepted' && !(body.name?.trim().length >= 2)) {
+            throw new ApiError(400, 'Type your full name to accept');
+          }
+
+          setState(doc, body.response, body.name?.trim() ?? '');
+        } else if (new URLSearchParams(query).get('preview') !== '1') {
+          doc.viewCount += 1;
+          doc.viewedAt = doc.viewedAt ?? nowIso();
+
+          if (!doc.events.some((e) => e.type === 'viewed')) {
+            logEvent(doc, 'viewed', 'First view');
+          }
+
+          save();
         }
 
         const document = hydrate(doc);
         return {
           business: data.settings,
-          document: document.customer ? { ...document, customer: { ...document.customer, notes: '' } } : document,
+          document: { ...document, customer: document.customer ? { ...document.customer, notes: '' } : null, events: [] },
         };
       }
       default:
@@ -479,6 +604,8 @@ function seed(): DemoData {
     paymentInstructions: 'Checks payable to Example Mold Co.\nCard payments by phone: (208) 555-0100',
     invoicePrefix: 'INV-',
     estimatePrefix: 'EST-',
+    logoDataUrl: '',
+    brandColor: '#1F6F5C',
   };
   const items: CatalogItem[] = [
     ['Mold inspection', 'Visual inspection and moisture mapping', 17500, 'visit', false],
@@ -547,10 +674,33 @@ function seed(): DemoData {
       sourceEstimateId: null,
       createdAt: nowIso(),
       updatedAt: nowIso(),
+      depositType: 'none',
+      depositValue: 0,
+      viewedAt: null,
+      viewCount: 0,
+      acceptedName: '',
+      acceptedAt: null,
+      events: [],
+      attachments: [],
       lines,
       payments: [],
       ...extra,
     };
+    const at = (offset: number, hour = 9) => `${d(offset)}T${String(hour).padStart(2, '0')}:15:00.000Z`;
+    doc.events.push({ id: nextId++, type: 'created', at: at(issueOffset, 8), detail: '' });
+
+    if (state !== 'draft') {
+      doc.events.push({ id: nextId++, type: 'sent', at: at(issueOffset, 9), detail: '' });
+    }
+
+    if (extra.viewedAt) {
+      doc.events.push({ id: nextId++, type: 'viewed', at: extra.viewedAt, detail: 'First view' });
+    }
+
+    if (state === 'accepted') {
+      doc.acceptedAt = at(issueOffset + 1, 15);
+      doc.events.push({ id: nextId++, type: 'accepted', at: doc.acceptedAt, detail: doc.acceptedName ? `Signed by ${doc.acceptedName}` : '' });
+    }
     const total = computeTotals(doc).totalCents;
     doc.payments = payments.map(([amount, method, offset, note]) => ({
       id: nextId++,
@@ -559,20 +709,40 @@ function seed(): DemoData {
       paidAt: d(offset),
       note,
     }));
+
+    for (const payment of doc.payments) {
+      doc.events.push({
+        id: nextId++,
+        type: 'payment',
+        at: `${payment.paidAt}T17:30:00.000Z`,
+        detail: `${formatCents(payment.amountCents)} by ${payment.method}`,
+      });
+    }
+
+    doc.events.sort((a, b) => (a.at < b.at ? -1 : 1));
     documents.push(doc);
   };
 
   add('invoice', 1, 'Unit 4B bathroom remediation', -54, 14, 'sent', [line('Mold inspection', 1), line('Mold remediation', 120), line('Air quality test', 2)], [
     ['full', 'check', -42, 'Check #2210'],
   ]);
-  add('invoice', 2, 'Attic remediation', -33, 14, 'sent', [line('Mold remediation', 300), line('Dehumidifier rental', 3), line('Air quality test', 1)]);
+  add('invoice', 2, 'Attic remediation', -33, 14, 'sent', [line('Mold remediation', 300), line('Dehumidifier rental', 3), line('Air quality test', 1)], [], {
+    viewedAt: `${d(-31)}T16:05:00.000Z`,
+    viewCount: 1,
+  });
   add('invoice', 0, 'Crawlspace mold remediation', -7, 14, 'sent', [line('Mold remediation', 400), line('Encapsulation', 400), line('Air quality test', 2)], [
     [150000, 'card', -6, 'Deposit'],
-  ], { discountType: 'percent', discountValue: 500 });
+  ], { discountType: 'percent', discountValue: 500, depositType: 'percent', depositValue: 5000, viewedAt: `${d(-7)}T19:42:00.000Z`, viewCount: 3 });
   add('invoice', 3, 'Front office inspection', -2, 14, 'sent', [line('Mold inspection', 1), line('Air quality test', 3)]);
   add('invoice', 1, 'Unit 7A follow-up test', 0, 14, 'draft', [line('Air quality test', 2)]);
   add('estimate', 3, 'Break room wall remediation', -1, 30, 'sent', [line('Mold remediation', 80), line('Dehumidifier rental', 2), line('Air quality test', 1)]);
-  add('estimate', 2, 'Basement encapsulation', -4, 30, 'accepted', [line('Encapsulation', 650), line('Dehumidifier rental', 4)]);
+  add('estimate', 2, 'Basement encapsulation', -4, 30, 'accepted', [line('Encapsulation', 650), line('Dehumidifier rental', 4)], [], {
+    depositType: 'percent',
+    depositValue: 3000,
+    acceptedName: 'Alex Placeholder',
+    viewedAt: `${d(-4)}T21:10:00.000Z`,
+    viewCount: 2,
+  });
 
   return { nextId, settings, customers, items, documents };
 }

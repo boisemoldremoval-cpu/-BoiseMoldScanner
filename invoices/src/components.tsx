@@ -223,10 +223,13 @@ export function DocumentPaper({ doc, business }: { doc: DocumentDetail; business
   const isInvoice = doc.kind === 'invoice';
   const title = isInvoice ? 'Invoice' : 'Estimate';
 
+  const depositLabel = doc.depositType === 'percent' ? ` (${percentFromBps(doc.depositValue)}%)` : '';
+
   return (
-    <article className="paper">
+    <article className="paper" style={{ '--brand': business.brandColor || '#1F6F5C' } as React.CSSProperties}>
       <header className="paper-header">
         <div>
+          {business.logoDataUrl && <img className="paper-logo" src={business.logoDataUrl} alt={business.name} />}
           <div className="paper-business">{business.name || 'Your business name'}</div>
           <div className="paper-muted pre">
             {[business.address, business.phone, business.email, business.website].filter(Boolean).join('\n')}
@@ -342,8 +345,34 @@ export function DocumentPaper({ doc, business }: { doc: DocumentDetail; business
               <td className="num">{formatCents(doc.balanceCents)}</td>
             </tr>
           )}
+          {doc.depositCents > 0 && (
+            <tr className="deposit-row">
+              <td>Deposit{depositLabel}</td>
+              <td className="num">{formatCents(doc.depositCents)}</td>
+            </tr>
+          )}
+          {isInvoice && doc.depositDueCents > 0 && (
+            <tr className="deposit-due-row">
+              <td>Deposit due now</td>
+              <td className="num">{formatCents(doc.depositDueCents)}</td>
+            </tr>
+          )}
         </tbody>
       </table>
+
+      {doc.attachments.length > 0 && (
+        <section className="paper-section">
+          <div className="paper-label">Photos</div>
+          <div className="paper-photos">
+            {doc.attachments.map((photo) => (
+              <figure key={photo.id}>
+                <img src={photo.url} alt={photo.caption || photo.filename} loading="lazy" />
+                {photo.caption && <figcaption>{photo.caption}</figcaption>}
+              </figure>
+            ))}
+          </div>
+        </section>
+      )}
 
       {isInvoice && business.paymentInstructions && doc.balanceCents > 0 && (
         <section className="paper-section">
@@ -361,6 +390,15 @@ export function DocumentPaper({ doc, business }: { doc: DocumentDetail; business
         <section className="paper-section">
           <div className="paper-label">Terms</div>
           <div className="pre paper-muted">{doc.terms}</div>
+        </section>
+      )}
+      {doc.acceptedAt && (
+        <section className="paper-section paper-signature">
+          <div className="paper-label">Accepted</div>
+          {doc.acceptedName && <div className="signature-name">{doc.acceptedName}</div>}
+          <div className="paper-muted">
+            {doc.acceptedName ? 'Signed electronically' : 'Marked accepted'} on {formatDate(doc.acceptedAt)}
+          </div>
         </section>
       )}
     </article>

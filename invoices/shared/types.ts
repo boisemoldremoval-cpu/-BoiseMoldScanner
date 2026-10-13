@@ -16,6 +16,12 @@ export interface BusinessSettings {
   paymentInstructions: string;
   invoicePrefix: string;
   estimatePrefix: string;
+
+  // A small image as a data: URL, shown at the top of every invoice.
+  logoDataUrl: string;
+
+  // Hex color used for headings and rules on invoices.
+  brandColor: string;
 }
 
 export interface Customer {
@@ -56,6 +62,33 @@ export interface Payment {
   note: string;
 }
 
+export type EventType =
+  | 'created'
+  | 'sent'
+  | 'viewed'
+  | 'payment'
+  | 'payment_removed'
+  | 'accepted'
+  | 'declined'
+  | 'voided'
+  | 'converted';
+
+export interface DocumentEvent {
+  id: number;
+  type: EventType;
+  at: string;
+  detail: string;
+}
+
+export interface Attachment {
+  id: number;
+  filename: string;
+  caption: string;
+  width: number;
+  height: number;
+  url: string;
+}
+
 export interface DocumentSummary {
   id: number;
   kind: DocumentKind;
@@ -69,6 +102,7 @@ export interface DocumentSummary {
   totalCents: number;
   paidCents: number;
   balanceCents: number;
+  viewedAt: string | null;
 }
 
 export interface DocumentDetail extends DocumentSummary {
@@ -80,8 +114,19 @@ export interface DocumentDetail extends DocumentSummary {
   discountType: DiscountType;
   discountValue: number;
   taxRateBps: number;
+  depositType: DiscountType;
+  depositValue: number;
+
+  // Requested deposit, and how much of it is still unpaid.
+  depositCents: number;
+  depositDueCents: number;
+  viewCount: number;
+  acceptedName: string;
+  acceptedAt: string | null;
   lines: LineItem[];
   payments: Payment[];
+  events: DocumentEvent[];
+  attachments: Attachment[];
   totals: Totals;
   publicToken: string;
   sentAt: string | null;

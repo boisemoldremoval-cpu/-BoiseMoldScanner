@@ -1,7 +1,8 @@
 import { useMemo, useState } from 'react';
 import { formatCents } from '../../shared/totals.ts';
 import type { Dashboard as DashboardData, DocumentKind, DocumentSummary } from '../../shared/types.ts';
-import { StatusBadge, formatShortDate } from '../components.tsx';
+import { Menu, StatusBadge, formatShortDate } from '../components.tsx';
+import { IS_DEMO } from '../env.ts';
 import { useFetch } from '../hooks.ts';
 import { navigate } from '../router.ts';
 
@@ -119,9 +120,20 @@ export function DocumentList({ kind }: { kind: DocumentKind }) {
     <div className="stack">
       <div className="page-header">
         <h1>{plural}</h1>
-        <a className="button primary" href={`#/${kind}s/new`}>
-          New {kind}
-        </a>
+        <div className="actions">
+          <a className="button primary" href={`#/${kind}s/new`}>
+            New {kind}
+          </a>
+          {kind === 'invoice' && !IS_DEMO && (
+            <Menu
+              label="Export"
+              items={[
+                { label: 'Download invoices (CSV)', onSelect: () => (window.location.href = '/api/export/invoices.csv') },
+                { label: 'Download payments (CSV)', onSelect: () => (window.location.href = '/api/export/payments.csv') },
+              ]}
+            />
+          )}
+        </div>
       </div>
       <div className="toolbar">
         <div className="tabs" role="tablist">
@@ -154,13 +166,13 @@ export function DocumentList({ kind }: { kind: DocumentKind }) {
   );
 }
 
-function DocumentTable({ rows }: { rows: DocumentSummary[] }) {
+export function DocumentTable({ rows, showCustomer = true }: { rows: DocumentSummary[]; showCustomer?: boolean }) {
   return (
     <table className="table">
       <thead>
         <tr>
           <th>Number</th>
-          <th className="hide-sm">Customer</th>
+          {showCustomer && <th className="hide-sm">Customer</th>}
           <th className="hide-sm">Due</th>
           <th className="hide-sm">Status</th>
           <th className="num">Amount</th>
@@ -177,12 +189,15 @@ function DocumentTable({ rows }: { rows: DocumentSummary[] }) {
                   {row.number}
                 </a>
                 {row.title && <div className="muted small truncate hide-sm">{row.title}</div>}
-                {row.customerName && <div className="muted small truncate show-sm">{row.customerName}</div>}
+                {showCustomer && row.customerName && <div className="muted small truncate show-sm">{row.customerName}</div>}
               </td>
-              <td className="truncate hide-sm">{row.customerName || <span className="muted">—</span>}</td>
+              {showCustomer && <td className="truncate hide-sm">{row.customerName || <span className="muted">—</span>}</td>}
               <td className="hide-sm nowrap">{formatShortDate(row.dueDate)}</td>
               <td className="hide-sm">
                 <StatusBadge status={row.status} />
+                {row.viewedAt && ['unpaid', 'partial', 'overdue', 'sent'].includes(row.status) && (
+                  <div className="muted small">Viewed {formatShortDate(row.viewedAt.slice(0, 10))}</div>
+                )}
               </td>
               <td className="num nowrap">
                 <div className="strong">{formatCents(row.totalCents)}</div>

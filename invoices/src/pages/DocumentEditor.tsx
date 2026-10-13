@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useState } from 'react';
-import { addDays, computeTotals, formatCents, localDate, type DiscountType } from '../../shared/totals.ts';
+import { addDays, computeTotals, depositCents, formatCents, localDate, type DiscountType } from '../../shared/totals.ts';
 import type {
   BusinessSettings,
   CatalogItem,
@@ -24,6 +24,8 @@ interface Draft {
   discountType: DiscountType;
   discountValue: number;
   taxRateBps: number;
+  depositType: DiscountType;
+  depositValue: number;
   lines: LineItem[];
 }
 
@@ -46,6 +48,7 @@ export function DocumentEditor({ kind, id }: { kind: DocumentKind; id: number | 
   const [addingCustomer, setAddingCustomer] = useState(false);
   const [taxText, setTaxText] = useState('0');
   const [discountPercentText, setDiscountPercentText] = useState('0');
+  const [depositPercentText, setDepositPercentText] = useState('50');
 
   useEffect(() => {
     let cancelled = false;
@@ -68,6 +71,8 @@ export function DocumentEditor({ kind, id }: { kind: DocumentKind; id: number | 
         setExisting(doc);
 
         const today = localDate();
+        const preselectedId = Number(new URLSearchParams(window.location.hash.split('?')[1] ?? '').get('customer'));
+        const preselected = customerList.find((c) => c.id === preselectedId);
         const initial: Draft = doc
           ? {
               customerId: doc.customerId,
@@ -80,12 +85,14 @@ export function DocumentEditor({ kind, id }: { kind: DocumentKind; id: number | 
               discountType: doc.discountType,
               discountValue: doc.discountValue,
               taxRateBps: doc.taxRateBps,
+              depositType: doc.depositType,
+              depositValue: doc.depositValue,
               lines: doc.lines,
             }
           : {
-              customerId: null,
+              customerId: preselected?.id ?? null,
               title: '',
-              serviceAddress: '',
+              serviceAddress: preselected?.address ?? '',
               issueDate: today,
               dueDate: addDays(today, kind === 'invoice' ? settings.defaultDueDays : 30),
               notes: settings.defaultNotes,
@@ -93,12 +100,15 @@ export function DocumentEditor({ kind, id }: { kind: DocumentKind; id: number | 
               discountType: 'none',
               discountValue: 0,
               taxRateBps: settings.defaultTaxRateBps,
+              depositType: 'none',
+              depositValue: 0,
               lines: [blankLine()],
             };
 
         setDraft(initial);
         setTaxText(percentFromBps(initial.taxRateBps));
         setDiscountPercentText(initial.discountType === 'percent' ? percentFromBps(initial.discountValue) : '0');
+        setDepositPercentText(initial.depositType === 'percent' ? percentFromBps(initial.depositValue) : '50');
       } catch (e) {
         setError(e instanceof Error ? e.message : String(e));
       }
@@ -110,6 +120,7 @@ export function DocumentEditor({ kind, id }: { kind: DocumentKind; id: number | 
   }, [id, kind]);
 
   const totals = useMemo(() => (draft ? computeTotals(draft) : null), [draft]);
+  const deposit = draft && totals ? depositCents(draft.depositType, draft.depositValue, totals.totalCents) : 0;
 
   if (!draft || !totals) {
     return error ? <p className="error">{error}</p> : <p className="muted">Loading…</p>;
@@ -436,6 +447,43 @@ export function DocumentEditor({ kind, id }: { kind: DocumentKind; id: number | 
               />
             </Field>
           </div>
+          <div className="row">
+            <Field label="Request a deposit" hint="Shown to the customer as due up front">
+              <select
+                value={draft.depositType}
+                onChange={(e) => {
+                  const depositType = e.target.value as DiscountType;
+                  const percent = bpsFromPercent(depositPercentText) ?? 5000;
+                  update({ depositType, depositValue: depositType === 'percent' ? percent : 0 });
+                }}
+              >
+                <option value="none">No deposit</option>
+                <option value="percent">Percent of total</option>
+                <option value="amount">Fixed amount</option>
+              </select>
+            </Field>
+            {draft.depositType === 'percent' && (
+              <Field label="Percent">
+                <input
+                  inputMode="decimal"
+                  value={depositPercentText}
+                  onChange={(e) => {
+                    setDepositPercentText(e.target.value);
+                    const value = bpsFromPercent(e.target.value);
+
+                    if (value !== null) {
+                      update({ depositValue: value });
+                    }
+                  }}
+                />
+              </Field>
+            )}
+            {draft.depositType === 'amount' && (
+              <Field label="Amount">
+                <MoneyInput valueCents={draft.depositValue} onChange={(depositValue) => update({ depositValue })} />
+              </Field>
+            )}
+          </div>
           <table className="summary">
             <tbody>
               <tr>
@@ -456,6 +504,12 @@ export function DocumentEditor({ kind, id }: { kind: DocumentKind; id: number | 
                 <td>Total</td>
                 <td className="num">{formatCents(totals.totalCents)}</td>
               </tr>
+              {deposit > 0 && (
+                <tr>
+                  <td className="muted">Deposit requested</td>
+                  <td className="num muted">{formatCents(deposit)}</td>
+                </tr>
+              )}
             </tbody>
           </table>
         </div>

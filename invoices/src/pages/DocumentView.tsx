@@ -1,7 +1,7 @@
 import { useState } from 'react';
 import { formatCents, localDate } from '../../shared/totals.ts';
 import type { BusinessSettings, DocumentDetail } from '../../shared/types.ts';
-import { del, post } from '../api.ts';
+import { del, post, put } from '../api.ts';
 import {
   DocumentPaper,
   Field,
@@ -15,7 +15,130 @@ import {
 } from '../components.tsx';
 import { useFetch } from '../hooks.ts';
 import { IS_DEMO } from '../env.ts';
+import { resizeImage } from '../images.ts';
 import { navigate } from '../router.ts';
+
+const EVENT_LABELS: Record<string, string> = {
+  created: 'Created',
+  sent: 'Sent to customer',
+  viewed: 'Viewed by customer',
+  payment: 'Payment recorded',
+  payment_removed: 'Payment removed',
+  accepted: 'Accepted',
+  declined: 'Declined',
+  voided: 'Voided',
+  converted: 'Converted',
+};
+
+function formatDateTime(iso: string) {
+  return new Date(iso.includes('T') ? iso : `${iso.replace(' ', 'T')}Z`).toLocaleString('en-US', {
+    month: 'short',
+    day: 'numeric',
+    hour: 'numeric',
+    minute: '2-digit',
+  });
+}
+
+function PhotosCard({
+  doc,
+  editable,
+  onChange,
+}: {
+  doc: DocumentDetail;
+  editable: boolean;
+  onChange: (doc: DocumentDetail) => void;
+}) {
+  const [busy, setBusy] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+
+  const upload = async (files: FileList | null) => {
+    if (!files?.length) {
+      return;
+    }
+
+    setBusy(true);
+    setError(null);
+
+    try {
+      let latest = doc;
+
+      for (const file of Array.from(files)) {
+        const image = await resizeImage(file, 1600);
+        latest = await post<DocumentDetail>(`/documents/${doc.id}/attachments`, {
+          filename: file.name,
+          caption: '',
+          ...image,
+        });
+        onChange(latest);
+      }
+    } catch (e) {
+      setError(e instanceof Error ? e.message : String(e));
+    } finally {
+      setBusy(false);
+    }
+  };
+
+  if (!editable && doc.attachments.length === 0) {
+    return null;
+  }
+
+  return (
+    <section className="card stack-sm">
+      <div className="card-header">
+        <h2>Photos</h2>
+        {editable && (
+          <label className="link-button file-button">
+            {busy ? 'Adding…' : '+ Add'}
+            <input
+              type="file"
+              accept="image/*"
+              multiple
+              disabled={busy}
+              onChange={(e) => {
+                void upload(e.target.files);
+                e.target.value = '';
+              }}
+            />
+          </label>
+        )}
+      </div>
+      {error && <p className="error small">{error}</p>}
+      {doc.attachments.length === 0 && (
+        <p className="muted small">Add before and after photos. Customers see them on the {doc.kind}.</p>
+      )}
+      <div className="photo-grid">
+        {doc.attachments.map((photo) => (
+          <div key={photo.id} className="photo-tile">
+            <img src={photo.url} alt={photo.caption || photo.filename} />
+            {editable ? (
+              <input
+                aria-label="Caption"
+                placeholder="Caption"
+                defaultValue={photo.caption}
+                onBlur={async (e) => {
+                  if (e.target.value !== photo.caption) {
+                    onChange(await put<DocumentDetail>(`/documents/${doc.id}/attachments/${photo.id}`, { caption: e.target.value }));
+                  }
+                }}
+              />
+            ) : (
+              photo.caption && <div className="muted small">{photo.caption}</div>
+            )}
+            {editable && (
+              <button
+                className="photo-remove"
+                aria-label={`Remove ${photo.caption || photo.filename}`}
+                onClick={async () => onChange(await del<DocumentDetail>(`/documents/${doc.id}/attachments/${photo.id}`))}
+              >
+                ✕
+              </button>
+            )}
+          </div>
+        ))}
+      </div>
+    </section>
+  );
+}
 
 export function publicLink(doc: DocumentDetail) {
   return `${window.location.origin}${window.location.pathname}#/i/${doc.publicToken}`;
@@ -129,7 +252,18 @@ export function DocumentView({ id }: { id: number }) {
             <h1>{doc.number}</h1>
             <StatusBadge status={doc.status} />
           </div>
-          {doc.customerName && <div className="muted">{doc.customerName}</div>}
+          <div className="muted">
+            {[
+              doc.customerName,
+              doc.viewedAt
+                ? `Viewed by customer ${formatShortDate(doc.viewedAt.slice(0, 10))}${doc.viewCount > 1 ? ` (${doc.viewCount} times)` : ''}`
+                : doc.state === 'sent'
+                  ? 'Not opened yet'
+                  : '',
+            ]
+              .filter(Boolean)
+              .join(' · ')}
+          </div>
         </div>
         <div className="actions">
           {editable && (
@@ -170,46 +304,68 @@ export function DocumentView({ id }: { id: number }) {
         </p>
       )}
 
-      <div className={isInvoice ? 'view-layout' : 'view-single'}>
+      <div className="view-layout">
         <DocumentPaper doc={doc} business={business} />
 
-        {isInvoice && (
-          <aside className="card stack-sm no-print">
-            <div className="card-header">
-              <h2>Payments</h2>
-              {canPay && (
-                <button className="link-button" onClick={() => setModal('payment')}>
-                  + Add
-                </button>
-              )}
-            </div>
-            {doc.payments.length === 0 && <p className="muted small">No payments yet.</p>}
-            {doc.payments.map((payment) => (
-              <div key={payment.id} className="payment">
-                <div>
-                  <div className="strong">{formatCents(payment.amountCents)}</div>
-                  <div className="muted small">
-                    {methodLabel(payment.method)} · {formatShortDate(payment.paidAt)}
-                    {payment.note && ` · ${payment.note}`}
-                  </div>
-                </div>
-                <button
-                  className="link-button danger small"
-                  onClick={() =>
-                    confirm('Remove this payment?') &&
-                    run(() => del<DocumentDetail>(`/documents/${doc.id}/payments/${payment.id}`))
-                  }
-                >
-                  Remove
-                </button>
+        <aside className="stack-sm no-print">
+          {isInvoice && (
+            <section className="card stack-sm">
+              <div className="card-header">
+                <h2>Payments</h2>
+                {canPay && (
+                  <button className="link-button" onClick={() => setModal('payment')}>
+                    + Add
+                  </button>
+                )}
               </div>
-            ))}
-            <div className="payment-summary">
-              <span>Balance due</span>
-              <span className="strong">{formatCents(doc.balanceCents)}</span>
-            </div>
-          </aside>
-        )}
+              {doc.payments.length === 0 && <p className="muted small">No payments yet.</p>}
+              {doc.payments.map((payment) => (
+                <div key={payment.id} className="payment">
+                  <div>
+                    <div className="strong">{formatCents(payment.amountCents)}</div>
+                    <div className="muted small">
+                      {methodLabel(payment.method)} · {formatShortDate(payment.paidAt)}
+                      {payment.note && ` · ${payment.note}`}
+                    </div>
+                  </div>
+                  <button
+                    className="link-button danger small"
+                    onClick={() =>
+                      confirm('Remove this payment?') &&
+                      run(() => del<DocumentDetail>(`/documents/${doc.id}/payments/${payment.id}`))
+                    }
+                  >
+                    Remove
+                  </button>
+                </div>
+              ))}
+              <div className="payment-summary">
+                <span>Balance due</span>
+                <span className="strong">{formatCents(doc.balanceCents)}</span>
+              </div>
+            </section>
+          )}
+
+          <PhotosCard doc={doc} editable={editable} onChange={setDoc} />
+
+          <section className="card stack-sm">
+            <h2>Activity</h2>
+            <ol className="timeline">
+              {[...doc.events].reverse().map((event) => (
+                <li key={event.id}>
+                  <span className={`timeline-dot dot-${event.type}`} aria-hidden="true" />
+                  <div>
+                    <div>
+                      {EVENT_LABELS[event.type] ?? event.type}
+                      {event.detail && <span className="muted"> · {event.detail}</span>}
+                    </div>
+                    <div className="muted small">{formatDateTime(event.at)}</div>
+                  </div>
+                </li>
+              ))}
+            </ol>
+          </section>
+        </aside>
       </div>
 
       {modal === 'share' && <ShareModal doc={doc} business={business} onClose={() => setModal(null)} />}
@@ -277,11 +433,11 @@ function ShareModal({ doc, business, onClose }: { doc: DocumentDetail; business:
             </a>
           )}
           {IS_DEMO ? (
-            <a className="button" href={`#/i/${doc.publicToken}`}>
+            <a className="button" href={`#/i/${doc.publicToken}?preview=1`}>
               See what the customer sees
             </a>
           ) : (
-            <a className="button" href={link} target="_blank" rel="noreferrer">
+            <a className="button" href={`${link}?preview=1`} target="_blank" rel="noreferrer">
               Preview
             </a>
           )}

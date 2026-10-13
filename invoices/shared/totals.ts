@@ -63,6 +63,22 @@ export function computeTotals(input: TotalsInput): Totals {
   };
 }
 
+/*
+ * The up-front amount requested before work starts. Percent deposits are
+ * basis points of the total; fixed deposits never exceed the total.
+ */
+export function depositCents(type: DiscountType, value: number, totalCents: number): number {
+  if (type === 'percent') {
+    return Math.min(totalCents, Math.round((totalCents * value) / 10000));
+  }
+
+  if (type === 'amount') {
+    return Math.min(totalCents, value);
+  }
+
+  return 0;
+}
+
 export type InvoiceStatus = 'draft' | 'unpaid' | 'partial' | 'paid' | 'overdue' | 'void';
 export type EstimateStatus = 'draft' | 'sent' | 'accepted' | 'declined' | 'converted';
 

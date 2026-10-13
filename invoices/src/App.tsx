@@ -4,7 +4,7 @@ import { Field, Icon, LogoMark } from './components.tsx';
 import { IS_DEMO } from './env.ts';
 import type { BusinessSettings } from '../shared/types.ts';
 import { navigate, useRoute } from './router.ts';
-import { Customers } from './pages/Customers.tsx';
+import { CustomerDetail, Customers } from './pages/Customers.tsx';
 import { DocumentEditor } from './pages/DocumentEditor.tsx';
 import { DocumentView } from './pages/DocumentView.tsx';
 import { Items } from './pages/Items.tsx';
@@ -142,7 +142,7 @@ function Page({ route }: { route: string[] }) {
       return <DocumentList key={kind} kind={kind} />;
     }
     case 'customers':
-      return <Customers />;
+      return id && /^\d+$/.test(id) ? <CustomerDetail key={id} id={Number(id)} /> : <Customers />;
     case 'items':
       return <Items />;
     case 'settings':

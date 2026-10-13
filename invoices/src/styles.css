@@ -551,6 +551,46 @@ textarea:focus {
   gap: 12px;
 }
 
+.stats.three {
+  grid-template-columns: repeat(3, 1fr);
+}
+
+.brand-row {
+  display: flex;
+  gap: 20px;
+  align-items: flex-start;
+  flex-wrap: wrap;
+}
+
+.logo-preview {
+  width: 180px;
+  height: 96px;
+  border: 1px dashed var(--border-strong);
+  border-radius: var(--radius);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 10px;
+  background: var(--surface);
+}
+
+.logo-preview img {
+  max-width: 100%;
+  max-height: 100%;
+  object-fit: contain;
+}
+
+.color-row {
+  align-items: center;
+  max-width: 260px;
+}
+
+.color-row input[type='color'] {
+  flex: 0 0 44px;
+  height: 38px;
+  padding: 2px;
+}
+
 .stat {
   background: var(--surface);
   border: 1px solid var(--border);
@@ -806,6 +846,105 @@ textarea:focus {
   gap: 8px;
 }
 
+.timeline {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  font-size: 0.9rem;
+}
+
+.timeline li {
+  display: flex;
+  gap: 10px;
+  align-items: flex-start;
+}
+
+.timeline-dot {
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  background: var(--border-strong);
+  margin-top: 6px;
+  flex-shrink: 0;
+}
+
+.dot-sent,
+.dot-viewed {
+  background: var(--info);
+}
+
+.dot-payment,
+.dot-accepted,
+.dot-converted {
+  background: var(--accent);
+}
+
+.dot-declined,
+.dot-voided,
+.dot-payment_removed {
+  background: var(--danger);
+}
+
+.file-button {
+  position: relative;
+  overflow: hidden;
+}
+
+.file-button input {
+  position: absolute;
+  inset: 0;
+  opacity: 0;
+  cursor: pointer;
+}
+
+.file-button:focus-within {
+  outline: 2px solid var(--accent);
+  border-radius: 4px;
+}
+
+.photo-grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 10px;
+}
+
+.photo-tile {
+  position: relative;
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.photo-tile img {
+  width: 100%;
+  aspect-ratio: 4 / 3;
+  object-fit: cover;
+  border-radius: 6px;
+  background: var(--bg);
+}
+
+.photo-tile input {
+  font-size: 0.8rem;
+  padding: 4px 6px;
+}
+
+.photo-remove {
+  position: absolute;
+  top: 4px;
+  right: 4px;
+  width: 24px;
+  height: 24px;
+  border-radius: 50%;
+  border: none;
+  background: rgba(16, 24, 32, 0.6);
+  color: #fff;
+  cursor: pointer;
+  font-size: 0.75rem;
+}
+
 .payment-summary {
   display: flex;
   justify-content: space-between;
@@ -846,7 +985,16 @@ textarea:focus {
   gap: 4px;
 }
 
+.paper-logo {
+  display: block;
+  max-height: 64px;
+  max-width: 220px;
+  object-fit: contain;
+  margin-bottom: 12px;
+}
+
 .paper-title {
+  color: var(--brand, var(--text));
   font-size: 1.6rem;
   font-weight: 300;
   text-transform: uppercase;
@@ -912,7 +1060,7 @@ textarea:focus {
   text-transform: uppercase;
   letter-spacing: 0.06em;
   color: var(--muted);
-  border-bottom: 2px solid var(--text);
+  border-bottom: 2px solid var(--brand, var(--text));
   padding: 8px 0;
 }
 
@@ -954,8 +1102,50 @@ textarea:focus {
 .paper-totals .balance-row td {
   font-weight: 700;
   font-size: 1.15rem;
-  border-top: 2px solid var(--text);
+  border-top: 2px solid var(--brand, var(--text));
   padding-top: 10px;
+}
+
+.paper-totals .deposit-row td {
+  color: var(--muted);
+  padding-top: 12px;
+}
+
+.paper-totals .deposit-due-row td {
+  font-weight: 700;
+  color: var(--brand, var(--accent));
+}
+
+.paper-photos {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(160px, 1fr));
+  gap: 12px;
+}
+
+.paper-photos figure {
+  margin: 0;
+  break-inside: avoid;
+}
+
+.paper-photos img {
+  width: 100%;
+  aspect-ratio: 4 / 3;
+  object-fit: cover;
+  border-radius: 6px;
+  background: var(--bg);
+  display: block;
+}
+
+.paper-photos figcaption {
+  font-size: 0.85rem;
+  color: var(--muted);
+  margin-top: 4px;
+}
+
+.signature-name {
+  font-family: 'Brush Script MT', 'Segoe Script', 'Snell Roundhand', cursive;
+  font-size: 1.8rem;
+  line-height: 1.2;
 }
 
 /* Customer-facing page */
@@ -998,6 +1188,25 @@ textarea:focus {
     align-items: stretch;
     width: 100%;
   }
+}
+
+.public-amounts {
+  display: flex;
+  gap: 28px;
+  flex-wrap: wrap;
+}
+
+.public-amount.secondary {
+  color: var(--muted);
+  font-weight: 600;
+}
+
+.sign-form {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  flex: 1 1 320px;
+  max-width: 520px;
 }
 
 .public-amount {
@@ -1095,6 +1304,10 @@ textarea:focus {
 
   .stats {
     grid-template-columns: repeat(2, 1fr);
+  }
+
+  .stats.three {
+    grid-template-columns: 1fr;
   }
 
   .grid-2,

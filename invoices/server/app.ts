@@ -1,7 +1,8 @@
 import { createHash, randomBytes, timingSafeEqual } from 'node:crypto';
 import express, { type NextFunction, type Request, type Response } from 'express';
 import { z } from 'zod';
-import { ConflictError, NotFoundError, Store } from './db.ts';
+import { ConflictError, MAX_ATTACHMENT_BYTES, NotFoundError, Store } from './db.ts';
+import type { DocumentDetail } from '../shared/types.ts';
 
 const SESSION_COOKIE = 'inv_session';
 const SESSION_TTL_MS = 30 * 24 * 60 * 60 * 1000;
@@ -25,6 +26,14 @@ const settingsSchema = z.object({
   paymentInstructions: text(4000),
   invoicePrefix: text(20),
   estimatePrefix: text(20),
+  logoDataUrl: z
+    .union([z.literal(''), z.string().regex(/^data:image\/(png|jpeg|webp|svg\+xml);base64,[A-Za-z0-9+/=]+$/, 'Logo must be an image')])
+    .refine((value) => value.length <= 400_000, 'Logo image is too large. Use one under 300 KB.')
+    .default(''),
+  brandColor: z
+    .string()
+    .regex(/^#[0-9a-fA-F]{6}$/, 'Brand color must look like #1F6F5C')
+    .default('#1F6F5C'),
 });
 
 const customerSchema = z.object({
@@ -65,7 +74,13 @@ const documentSchema = z
     discountType: z.enum(['none', 'percent', 'amount']),
     discountValue: z.number().int().min(0),
     taxRateBps: bps,
+    depositType: z.enum(['none', 'percent', 'amount']).default('none'),
+    depositValue: z.number().int().min(0).default(0),
     lines: z.array(lineSchema).max(200),
+  })
+  .refine((doc) => doc.depositType !== 'percent' || doc.depositValue <= 10000, {
+    message: 'Deposit cannot exceed 100%',
+    path: ['depositValue'],
   })
   .refine((doc) => doc.discountType !== 'percent' || doc.discountValue <= 10000, {
     message: 'Discount cannot exceed 100%',
@@ -85,6 +100,19 @@ const paymentSchema = z.object({
 
 const kindSchema = z.enum(['invoice', 'estimate']);
 
+const attachmentSchema = z.object({
+  filename: z.string().trim().min(1).max(200),
+  caption: text(300),
+  width: z.number().int().min(1).max(10000),
+  height: z.number().int().min(1).max(10000),
+  dataUrl: z.string().regex(/^data:image\/(jpeg|png|webp);base64,[A-Za-z0-9+/=]+$/, 'Photos must be JPEG, PNG or WebP'),
+});
+
+const respondSchema = z.discriminatedUnion('response', [
+  z.object({ response: z.literal('accepted'), name: z.string().trim().min(2, 'Type your full name to accept').max(200) }),
+  z.object({ response: z.literal('declined') }),
+]);
+
 export interface AppOptions {
   store: Store;
 
@@ -97,6 +125,9 @@ export function createApp({ store, adminPassword }: AppOptions) {
   const sessions = new Map<string, number>();
 
   app.disable('x-powered-by');
+
+  // Photo uploads arrive as base64 JSON, so they get a larger body limit than everything else.
+  app.use(/^\/api\/documents\/\d+\/attachments$/, express.json({ limit: '4mb' }));
   app.use(express.json({ limit: '1mb' }));
 
   const isAuthed = (req: Request) => {
@@ -142,20 +173,27 @@ export function createApp({ store, adminPassword }: AppOptions) {
   });
 
   app.get('/api/public/:token', (req, res) => {
-    const document = store.getDocumentByToken(req.params.token);
-    res.json({ business: store.getSettings(), document: stripInternal(document) });
+    // The owner's own previews don't count as customer views.
+    const isPreview = req.query.preview === '1' || (Boolean(adminPassword) && isAuthed(req));
+    const document = store.recordView(req.params.token, !isPreview);
+    res.json({ business: store.getSettings(), document: forCustomer(document, req.params.token) });
   });
 
   app.post('/api/public/:token/respond', (req, res) => {
-    const { response } = z.object({ response: z.enum(['accepted', 'declined']) }).parse(req.body);
+    const body = respondSchema.parse(req.body);
     const document = store.getDocumentByToken(req.params.token);
 
     if (document.kind !== 'estimate' || document.state !== 'sent') {
       throw new ConflictError('This estimate is no longer awaiting a response');
     }
 
-    store.setState(document.id, response);
-    res.json({ business: store.getSettings(), document: stripInternal(store.getDocument(document.id)) });
+    const updated = store.setState(document.id, body.response, body.response === 'accepted' ? body.name : '');
+    res.json({ business: store.getSettings(), document: forCustomer(updated, req.params.token) });
+  });
+
+  app.get('/api/public/:token/attachments/:attachmentId', (req, res) => {
+    const document = store.getDocumentByToken(req.params.token);
+    sendImage(res, store.getAttachment(document.id, positiveInt(req.params.attachmentId)));
   });
 
   // Everything below requires the owner to be signed in.
@@ -183,6 +221,10 @@ export function createApp({ store, adminPassword }: AppOptions) {
 
   app.get('/api/customers', (_req, res) => {
     res.json(store.listCustomers());
+  });
+
+  app.get('/api/customers/:id', (req, res) => {
+    res.json(store.getCustomer(id(req)));
   });
 
   app.post('/api/customers', (req, res) => {
@@ -255,8 +297,49 @@ export function createApp({ store, adminPassword }: AppOptions) {
   });
 
   app.delete('/api/documents/:id/payments/:paymentId', (req, res) => {
-    const paymentId = z.coerce.number().int().positive().parse(req.params.paymentId);
-    res.json(store.deletePayment(id(req), paymentId));
+    res.json(store.deletePayment(id(req), positiveInt(req.params.paymentId)));
+  });
+
+  app.post('/api/documents/:id/attachments', (req, res) => {
+    const input = attachmentSchema.parse(req.body);
+    const [header, base64] = input.dataUrl.split(',');
+    const data = Buffer.from(base64, 'base64');
+
+    if (data.length > MAX_ATTACHMENT_BYTES) {
+      throw new ConflictError('That photo is too large. Photos must be under 2 MB.');
+    }
+
+    res.status(201).json(
+      store.addAttachment(id(req), {
+        filename: input.filename,
+        mime: header.slice(5, header.indexOf(';')),
+        data: new Uint8Array(data),
+        width: input.width,
+        height: input.height,
+        caption: input.caption,
+      }),
+    );
+  });
+
+  app.get('/api/documents/:id/attachments/:attachmentId', (req, res) => {
+    sendImage(res, store.getAttachment(id(req), positiveInt(req.params.attachmentId)));
+  });
+
+  app.put('/api/documents/:id/attachments/:attachmentId', (req, res) => {
+    const { caption } = z.object({ caption: text(300) }).parse(req.body);
+    res.json(store.updateAttachment(id(req), positiveInt(req.params.attachmentId), caption));
+  });
+
+  app.delete('/api/documents/:id/attachments/:attachmentId', (req, res) => {
+    res.json(store.deleteAttachment(id(req), positiveInt(req.params.attachmentId)));
+  });
+
+  app.get('/api/export/:file', (req, res) => {
+    const file = z.enum(['invoices.csv', 'payments.csv']).parse(req.params.file);
+    const csv = file === 'invoices.csv' ? store.exportInvoicesCsv() : store.exportPaymentsCsv();
+    res.setHeader('Content-Type', 'text/csv; charset=utf-8');
+    res.setHeader('Content-Disposition', `attachment; filename="${file}"`);
+    res.send(csv);
   });
 
   app.use('/api', (_req, res) => {
@@ -283,12 +366,34 @@ export function createApp({ store, adminPassword }: AppOptions) {
 }
 
 function id(req: Request): number {
-  return z.coerce.number().int().positive().parse(req.params.id);
+  return positiveInt(req.params.id);
 }
 
-// Customers see the document, not internal bookkeeping fields.
-function stripInternal<T extends { customer: { notes: string } | null }>(document: T): T {
-  return document.customer ? { ...document, customer: { ...document.customer, notes: '' } } : document;
+function positiveInt(value: unknown): number {
+  return z.coerce.number().int().positive().parse(value);
+}
+
+function sendImage(res: Response, image: { mime: string; data: Uint8Array }) {
+  res.setHeader('Content-Type', image.mime);
+  res.setHeader('Cache-Control', 'private, max-age=86400');
+  res.setHeader('X-Content-Type-Options', 'nosniff');
+  res.send(Buffer.from(image.data));
+}
+
+/*
+ * What a customer may see: no private customer notes, no internal activity
+ * log, and photo URLs that go through the customer's own link.
+ */
+function forCustomer(document: DocumentDetail, token: string): DocumentDetail {
+  return {
+    ...document,
+    customer: document.customer ? { ...document.customer, notes: '' } : null,
+    events: [],
+    attachments: document.attachments.map((a) => ({
+      ...a,
+      url: `/api/public/${encodeURIComponent(token)}/attachments/${a.id}`,
+    })),
+  };
 }
 
 function safeEqual(a: string, b: string): boolean {
