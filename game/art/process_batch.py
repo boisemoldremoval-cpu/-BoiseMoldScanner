@@ -2,7 +2,7 @@
 
 usage: python3 process_batch.py <input.jpg> <name> <fit_tiles>
 The pictures are isometric. fit_tiles is the footprint width the picture's base should span
-(the base is drawn 1.15 x that width). ax, ay = midpoint of the base's left and right corners.
+(the base is drawn exactly that wide). ax, ay = midpoint of the base's left and right corners.
 """
 import os
 import sys
@@ -38,10 +38,13 @@ rgba.save(os.path.join(here, f'{name}.webp'), 'WEBP', quality=88, method=6)
 solid = al > 0
 ys, xs = np.where(solid)
 top, bottom = ys.min(), ys.max()
-y0 = int(bottom - (bottom - top) * 0.45)                         # the base sits in the lower part of the picture
-cols = np.where(solid[y0:].any(axis=0))[0]
+# The base's left and right corners: the outermost columns in the lower half with a solid run of
+# some height, so thin poles, lamps and flagpoles sticking out do not count.
+y0 = int(bottom - (bottom - top) * 0.5)
+band = solid[y0:bottom + 1]
+cols = np.where(band.sum(axis=0) >= max(8, band.shape[0] * 0.12))[0]
 left, right = cols.min(), cols.max()
-ly = y0 + np.where(solid[y0:, left])[0].mean()
-ry = y0 + np.where(solid[y0:, right])[0].mean()
-ppt = (right - left) / (fit * 1.15)
+ly = y0 + np.where(band[:, left])[0].mean()
+ry = y0 + np.where(band[:, right])[0].mean()
+ppt = (right - left) / fit
 print(f"{{ src: 'art/{name}.webp', w: {rgba.width}, h: {rgba.height}, ax: {round((left + right) / 2)}, ay: {round((ly + ry) / 2)}, ppt: {round(ppt)} }}")

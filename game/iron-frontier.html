@@ -754,21 +754,21 @@
   const tileOf = e => clamp(Math.floor(e.z), 0, N - 1) * N + clamp(Math.floor(e.x), 0, N - 1);
   const reqMet = (o, req) => !req || have(o, req);
 
-  // Painted building art (art/ folder, Vanguard Batch 1). The pictures are isometric, so each is centred on its footprint and
-  // sized so its base spans the footprint width. ax, ay: pixel at the footprint centre; ppt: pixels per map tile.
+  // Painted building art (art/ folder, Vanguard Batch 1), measured by art/process_batch.py. Each picture is centred on its
+  // footprint and sized so its base is exactly as wide as the footprint. ax, ay: pixel at the footprint centre; ppt: pixels per map tile.
   const ART = {
-    hq: { 0: { src: 'art/S01-vanguard.webp', w: 1024, h: 1002, ax: 512, ay: 731, ppt: 297 } },
-    power: { 0: { src: 'art/S02-vanguard.webp', w: 1024, h: 986, ax: 512, ay: 703, ppt: 445 } },
+    hq: { 0: { src: 'art/S01-vanguard.webp', w: 1024, h: 1002, ax: 516, ay: 715, ppt: 327 } },
+    power: { 0: { src: 'art/S02-vanguard.webp', w: 1024, h: 986, ax: 518, ay: 686, ppt: 496 } },
     // the painted refinery includes its unloading dock, so it covers 3 x 3 tiles and sits half a tile toward the front
-    refinery: { 0: { src: 'art/S03-vanguard.webp', w: 1024, h: 969, ax: 512, ay: 658, ppt: 297, oz: 0.5 } },
-    silo: { 0: { src: 'art/S04-vanguard.webp', w: 1024, h: 1002, ax: 512, ay: 692, ppt: 556 } },
-    barracks: { 0: { src: 'art/S05-vanguard.webp', w: 1024, h: 826, ax: 488, ay: 506, ppt: 425 } },
-    factory: { 0: { src: 'art/S06-vanguard.webp', w: 1024, h: 955, ax: 512, ay: 646, ppt: 297 } },
-    radar: { 0: { src: 'art/S07-vanguard.webp', w: 1024, h: 1018, ax: 512, ay: 735, ppt: 445 } },
+    refinery: { 0: { src: 'art/S03-vanguard.webp', w: 1024, h: 969, ax: 528, ay: 662, ppt: 330, oz: 0.5 } },
+    silo: { 0: { src: 'art/S04-vanguard.webp', w: 1024, h: 1002, ax: 516, ay: 694, ppt: 498 } },
+    barracks: { 0: { src: 'art/S05-vanguard.webp', w: 1024, h: 826, ax: 490, ay: 489, ppt: 484 } },
+    factory: { 0: { src: 'art/S06-vanguard.webp', w: 1024, h: 955, ax: 516, ay: 630, ppt: 331 } },
+    radar: { 0: { src: 'art/S07-vanguard.webp', w: 1024, h: 1018, ax: 518, ay: 727, ppt: 493 } },
     // vehicles park on the repair pad, so it is drawn underneath them
-    repair: { 0: { src: 'art/S08-vanguard.webp', w: 1024, h: 966, ax: 512, ay: 580, ppt: 445, flat: true } },
-    tower: { 0: { src: 'art/S09-vanguard.webp', w: 1024, h: 883, ax: 512, ay: 596, ppt: 890 } },
-    atower: { 0: { src: 'art/S10-vanguard.webp', w: 1024, h: 1196, ax: 512, ay: 885, ppt: 890 } },
+    repair: { 0: { src: 'art/S08-vanguard.webp', w: 1024, h: 966, ax: 510, ay: 565, ppt: 494, flat: true } },
+    tower: { 0: { src: 'art/S09-vanguard.webp', w: 1024, h: 883, ax: 516, ay: 576, ppt: 1000 } },
+    atower: { 0: { src: 'art/S10-vanguard.webp', w: 1024, h: 1196, ax: 515, ay: 880, ppt: 984 } },
   };
   const artTex = {};
   Object.values(ART).forEach(byOwner => Object.values(byOwner).forEach(a => {
