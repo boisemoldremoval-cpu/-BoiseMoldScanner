@@ -49,5 +49,8 @@ ppt = (right[0] - left[0]) / span_tiles
 # footprint centre: midpoint of the side corners, nudged so the bottom corner lands where it should
 cx, cy = (left[0] + right[0]) / 2, (left[1] + right[1]) / 2
 print(f'{name}: {W}x{H}, {os.path.getsize(os.path.join(here, name + ".webp"))} bytes')
+# camera elevation implied by the picture: how far the front corner drops below the footprint centre
+pitch_img = math.degrees(math.asin(min(1, 2 * (bottom[1] - cy) / ((fw * math.sin(YAW) + fh * math.cos(YAW)) * ppt))))
+print(f'  picture camera elevation about {pitch_img:.0f} degrees (game uses 29)')
 print(f'  corners L{tuple(round(v) for v in left)} R{tuple(round(v) for v in right)} B{tuple(round(v) for v in bottom)}')
 print(f"  ART entry: {{ src: 'art/{name}.webp', w: {W}, h: {H}, ax: {round(cx)}, ay: {round(cy)}, ppt: {round(ppt)} }}")
