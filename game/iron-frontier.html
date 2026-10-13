@@ -240,7 +240,7 @@
 (() => {
   'use strict';
   // ================= constants & definitions =================
-  const N = 64, CMAX = 300, CAP = 700, PITCH = 1.02;
+  const N = 64, CMAX = 300, CAP = 700, PITCH = 0.5, YAW = 0.68;
   const $ = id => document.getElementById(id);
   const clamp = (v, a, b) => v < a ? a : v > b ? b : v;
   let seed = 1;
@@ -649,8 +649,9 @@
     g.putImageData(img, 0, 0);
     const tex = new THREE.CanvasTexture(cv); tex.anisotropy = renderer.capabilities.getMaxAnisotropy();
     ground = new THREE.Mesh(new THREE.PlaneGeometry(N, N), new THREE.MeshLambertMaterial({ map: tex }));
+    ground.material.depthWrite = false; ground.renderOrder = -10;
     ground.rotation.x = -Math.PI / 2; ground.position.set(N / 2, 0, N / 2); ground.receiveShadow = true; world.add(ground);
-    const outside = new THREE.Mesh(new THREE.PlaneGeometry(400, 400), basic(0x050605)); outside.rotation.x = -Math.PI / 2; outside.position.set(N / 2, -0.05, N / 2); world.add(outside);
+    const outside = new THREE.Mesh(new THREE.PlaneGeometry(400, 400), new THREE.MeshBasicMaterial({ color: 0x050605, depthWrite: false })); outside.renderOrder = -11; outside.rotation.x = -Math.PI / 2; outside.position.set(N / 2, -0.05, N / 2); world.add(outside);
 
     rockIdx = new Int32Array(N * N).fill(-1); treeIdx = new Int32Array(N * N).fill(-1); crystIdx = new Int32Array(N * N).fill(-1);
     const rocks = [], trees = []; crystTiles = [];
@@ -668,7 +669,9 @@
     crystTiles.forEach((t, k) => { crystIdx[t] = k * 4; });
     shroudTex = new THREE.DataTexture(new Uint8Array(N * N * 4), N, N, THREE.RGBAFormat);
     shroudTex.magFilter = THREE.LinearFilter; shroudTex.minFilter = THREE.LinearFilter;
-    const sh = new THREE.Mesh(new THREE.PlaneGeometry(N, N), new THREE.MeshBasicMaterial({ map: shroudTex, transparent: true, depthWrite: false }));
+    // the shroud overhangs the map by a tile so no ground peeks out at the low camera angle
+    shroudTex.repeat.set((N + 2) / N, (N + 2) / N); shroudTex.offset.set(-1 / N, -1 / N);
+    const sh = new THREE.Mesh(new THREE.PlaneGeometry(N + 2, N + 2), new THREE.MeshBasicMaterial({ map: shroudTex, transparent: true, depthWrite: false }));
     sh.rotation.x = -Math.PI / 2; sh.position.set(N / 2, 0.06, N / 2); sh.renderOrder = 1; world.add(sh);
   }
   function revealStatic(t) {
@@ -750,6 +753,23 @@
   const tileOf = e => clamp(Math.floor(e.z), 0, N - 1) * N + clamp(Math.floor(e.x), 0, N - 1);
   const reqMet = (o, req) => !req || have(o, req);
 
+  // Painted building art (art/ folder). ax, ay: pixel at the footprint centre; ppt: pixels per map tile.
+  const ART = {
+    hq: { 0: { src: 'art/S01-vanguard.webp', w: 1152, h: 768, ax: 578, ay: 488, ppt: 270 } },
+  };
+  const artTex = {};
+  Object.values(ART).forEach(byOwner => Object.values(byOwner).forEach(a => {
+    new THREE.TextureLoader().load(a.src, t => { t.anisotropy = 4; artTex[a.src] = t; ents.forEach(e => { if (e.kind === 'bld' && !e.dead && !e.art) { applyArt(e); } }); }, undefined, () => { /* keep the 3D model */ });
+  }));
+  function applyArt(b) {
+    const a = ART[b.type] && ART[b.type][b.owner], tex = a && artTex[a.src];
+    if (!tex) { return; }
+    const keep = new Set([b.ring, b.wrench, b.primaryTag, b.rangeRing]);
+    b.obj.children.forEach(c => { if (!keep.has(c)) { c.visible = false; } });
+    const m = new THREE.Mesh(new THREE.PlaneGeometry(a.w / a.ppt, a.h / a.ppt), new THREE.MeshBasicMaterial({ map: tex, alphaTest: 0.5 }));
+    m.userData.off = { x: (a.ax - a.w / 2) / a.ppt, y: (a.ay - a.h / 2) / a.ppt };
+    b.obj.add(m); b.art = m;
+  }
   function attachBldModel(b) {
     const m = bldModel(b.type, b.owner);
     b.obj = m.g; b.turret = m.turret; b.dish = m.dish; b.stacks = m.stacks; b.my = m.my; b.door = m.door; b.gauges = m.gauges;
@@ -763,6 +783,7 @@
     }
     b.wrench = tagSprite(wrenchTex, 0.6, 0.6, 1.75); m.g.add(b.wrench);
     b.primaryTag = tagSprite(primaryTex, 1.2, 0.3, 1.45); m.g.add(b.primaryTag);
+    b.art = null; applyArt(b);
   }
   function addBuilding(o, type, tx, tz) {
     const d = BLD[type];
@@ -1680,12 +1701,14 @@
     cam.x = clamp(cam.x, 2, N - 2); cam.z = clamp(cam.z, 2, N - 1);
     const hh = cam.dist * 0.42, a = view.clientWidth / Math.max(1, view.clientHeight);
     camera.left = -hh * a; camera.right = hh * a; camera.top = hh; camera.bottom = -hh; camera.updateProjectionMatrix();
-    camera.position.set(cam.x, Math.sin(PITCH) * 60, cam.z + Math.cos(PITCH) * 60);
+    camera.position.set(cam.x + Math.sin(YAW) * Math.cos(PITCH) * 60, Math.sin(PITCH) * 60, cam.z + Math.cos(YAW) * Math.cos(PITCH) * 60);
     camera.lookAt(cam.x, 0, cam.z);
-    const sh = Math.max(20, hh * a * 1.3), sc = sun.shadow.camera;
+    const sh = Math.max(20, Math.max(hh * a, hh / Math.sin(PITCH)) * 1.3), sc = sun.shadow.camera;
     if (Math.abs(sc.right - sh) > 0.5) { sc.left = -sh; sc.right = sh; sc.top = sh; sc.bottom = -sh; sc.updateProjectionMatrix(); }
     sun.position.set(cam.x - 16, 34, cam.z + 10); sun.target.position.set(cam.x, 0, cam.z);
   }
+  // move the camera by an amount measured in screen directions (right, down) on the ground
+  function panBy(rx, dn) { cam.x += rx * Math.cos(YAW) + dn * Math.sin(YAW); cam.z += -rx * Math.sin(YAW) + dn * Math.cos(YAW); }
   function groundAtNdc(nx, ny) { ndcV.set(nx, ny); ray.setFromCamera(ndcV, camera); const p = new THREE.Vector3(); return ray.ray.intersectPlane(groundPlane, p) ? p : null; }
   function groundAt(px, py) { return groundAtNdc(px / view.clientWidth * 2 - 1, -(py / view.clientHeight) * 2 + 1); }
   const projV = new THREE.Vector3();
@@ -1871,7 +1894,7 @@
     if (!drag.moved) { return; }
     if (drag.type !== 'mouse' || drag.button === 1 || drag.button === 2) {
       const wpp = 2 * cam.dist * 0.42 / view.clientHeight;
-      cam.x = drag.cx - (p.x - drag.sx) * wpp; cam.z = drag.cz - (p.y - drag.sy) * wpp / Math.sin(PITCH);
+      cam.x = drag.cx; cam.z = drag.cz; panBy(-(p.x - drag.sx) * wpp, -(p.y - drag.sy) * wpp / Math.sin(PITCH));
     } else if (drag.button === 0 && !placing) {
       selBox.hidden = false;
       Object.assign(selBox.style, { left: Math.min(drag.sx, p.x) + 'px', top: Math.min(drag.sy, p.y) + 'px', width: Math.abs(p.x - drag.sx) + 'px', height: Math.abs(p.y - drag.sy) + 'px' });
@@ -1998,7 +2021,7 @@
       if (mouse.x < E) { dx = -1; } else if (mouse.x > w - E) { dx = 1; }
       if (mouse.y < E) { dz = -1; } else if (mouse.y > h - E) { dz = 1; }
     }
-    cam.x += dx * sp; cam.z += dz * sp;
+    panBy(dx * sp, dz * sp);
   }
 
   // ================= UI: sidebar =================
@@ -2205,6 +2228,7 @@
   });
 
   // ================= per-frame visuals =================
+  const artUp = new THREE.Vector3(), artRight = new THREE.Vector3();
   function syncVisuals(dt) {
     const q = camera.quaternion, live = state === 'play' && !paused;
     for (const e of ents) {
@@ -2222,6 +2246,13 @@
         }
       } else {
         const r = 1 - Math.pow(1 - e.rise, 3); e.obj.scale.set(1, Math.max(0.02, r), 1);
+        if (e.art) {
+          // face the camera and slide so the footprint centre in the picture sits on the building's centre
+          e.art.quaternion.copy(q);
+          artUp.set(0, 1, 0).applyQuaternion(q); artRight.set(1, 0, 0).applyQuaternion(q);
+          const o = e.art.userData.off;
+          e.art.position.copy(artUp).multiplyScalar(o.y).addScaledVector(artRight, -o.x);
+        }
         if (e.dish) {
           if (e.type === 'radar') { if (!lowPower(e.owner)) { e.dish.rotation.y += dt * 1.2; } }
           else { const B = prod[e.owner] && prod[e.owner].bld, busy = B && B.type && !B.ready && !B.hold; e.dish.rotation.y = Math.sin(gameTime * (busy ? 1.1 : 0.25) + e.id) * 1.4; }
