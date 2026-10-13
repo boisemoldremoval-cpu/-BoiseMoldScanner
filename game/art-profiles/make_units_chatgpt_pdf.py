@@ -42,10 +42,11 @@ story = [Paragraph('Iron Frontier: Unit Images for ChatGPT', st['title']),
                    'When an image is done, type <b>"next"</b>. Save each image with the file name shown.', st['note']),
          Paragraph('Instructions for ChatGPT', st['h2']),
          box(Paragraph(
-             'You are making unit art for my real-time strategy game, Iron Frontier. There are 11 units listed below. '
+             'You are making <b>unit</b> art (soldiers and vehicles) for my real-time strategy game, Iron Frontier. '
+             'The buildings are already finished, so <b>do not draw any buildings</b>. There are 11 units listed below. '
              'Make <b>one image at a time, in order, starting with U01</b>. After each image, tell me its file name, then wait until I type '
              '<b>"next"</b> before making the following one. Do not put more than one unit in an image. '
-             'Every image must match the style picture below (my buildings, already in the game) and follow these rules:<br/><br/>'
+             'Copy only the art style of the example picture below, not its subjects, and follow these rules:<br/><br/>'
              '&bull; Hand-painted real-time-strategy game art like classic Command and Conquer, detailed and weathered.<br/>'
              '&bull; Isometric 3/4 view from the front-right corner, looking down at about 35 degrees, sun from the upper left.<br/>'
              '&bull; Vanguard faction colors: olive drab (#8A8457) with bold gold-yellow trim stripes (#D9AE3A).<br/>'
@@ -53,17 +54,24 @@ story = [Paragraph('Iron Frontier: Unit Images for ChatGPT', st['title']),
              '&bull; Plain pure white background. No ground, no shadow, no text, no border.<br/>'
              '&bull; Square image, 1024 x 1024.', st['prompt'])),
          Spacer(1, 8),
-         Paragraph('Style picture: match this look', st['h2']),
+         Paragraph('Style example only: do not draw these buildings', st['h2']),
          Image(os.path.join(HERE, 'style-reference.png'), width=7.3 * inch, height=7.3 * inch / 4),
-         Paragraph('The units must look like they belong next to these buildings.', st['note']),
-         Paragraph('The 11 units', st['h2'])]
+         Paragraph('These are my finished buildings. Use them only for the painting style, colors and camera angle, '
+                   'so the units look like they belong next to them.', st['note']),
+         Paragraph('The 11 units to draw', st['h2']),
+         Paragraph('The small picture beside each prompt is the plain placeholder model in the game now. It shows what the unit is; '
+                   'make the new image far more detailed, in the style above.', st['note'])]
 
 for i, (uid, key, name, kind, role, cost, armor, weapon, size, look) in enumerate(UNITS):
     noun = 'soldier' if kind == 'Infantry' else 'vehicle'
     extra = ' Keep the shape bold and simple because soldiers are tiny on the map: clear silhouette, bright gold helmet stripe, chunky gear.' if kind == 'Infantry' else ''
     prompt = f'<b>{name}</b>: {look}.{extra} ' + STYLE.format(kind=noun) + ' Square image, 1024 x 1024.'
-    story.append(KeepTogether([Paragraph(f'{i + 1}. {uid} · {name} &nbsp;&nbsp;<font color="#5E6258" size="9">file name: <b>{uid}-A.png</b></font>', st['uh']),
-                               box(Paragraph(prompt, st['prompt'])), Spacer(1, 8)]))
+    pic = Image(os.path.join(HERE, 'reference-renders', key + '.png'), width=1.25 * inch, height=1.25 * inch * 0.75)
+    row = Table([[pic, Paragraph(prompt, st['prompt'])]], colWidths=[1.4 * inch, 5.9 * inch])
+    row.setStyle(TableStyle([('VALIGN', (0, 0), (-1, -1), 'MIDDLE'), ('BACKGROUND', (0, 0), (-1, -1), BOX), ('BOX', (0, 0), (-1, -1), 0.6, LINE),
+                             ('LEFTPADDING', (0, 0), (-1, -1), 8), ('RIGHTPADDING', (0, 0), (-1, -1), 10), ('TOPPADDING', (0, 0), (-1, -1), 7), ('BOTTOMPADDING', (0, 0), (-1, -1), 8)]))
+    story.append(KeepTogether([Paragraph(f'{i + 1}. {uid} · {name} ({kind.lower()}) &nbsp;&nbsp;<font color="#5E6258" size="9">file name: <b>{uid}-A.png</b></font>', st['uh']),
+                               row, Spacer(1, 8)]))
 
 story += [Paragraph('When all 11 are done', st['h2']),
           Paragraph('Send the 11 images back to Claude, either one by one or together in a PDF, so they can go into the game. '
