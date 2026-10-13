@@ -62,14 +62,19 @@ export function PublicDocument({ token }: { token: string }) {
             </div>
           )
         ) : doc.status === 'sent' ? (
-          <div className="row wrap">
-            <span>Would you like to go ahead with this estimate?</span>
-            <button className="button primary" onClick={() => respond('accepted')}>
-              Accept estimate
-            </button>
-            <button className="button" onClick={() => respond('declined')}>
-              Decline
-            </button>
+          <div className="public-estimate">
+            <div>
+              <div className="muted small">Estimate total</div>
+              <div className="public-amount">{formatCents(doc.totalCents)}</div>
+            </div>
+            <div className="public-actions">
+              <button className="button primary" onClick={() => respond('accepted')}>
+                Accept estimate
+              </button>
+              <button className="button" onClick={() => respond('declined')}>
+                Decline
+              </button>
+            </div>
           </div>
         ) : (
           <strong>

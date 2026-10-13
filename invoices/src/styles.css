@@ -806,6 +806,28 @@ textarea:focus {
   padding: 16px 20px;
 }
 
+.public-estimate {
+  display: flex;
+  align-items: center;
+  gap: 16px;
+  flex-wrap: wrap;
+}
+
+.public-actions {
+  display: flex;
+  gap: 8px;
+}
+
+@media screen and (max-width: 600px) {
+  .public-bar,
+  .public-estimate,
+  .public-actions {
+    flex-direction: column;
+    align-items: stretch;
+    width: 100%;
+  }
+}
+
 .public-amount {
   font-size: 1.6rem;
   font-weight: 700;
