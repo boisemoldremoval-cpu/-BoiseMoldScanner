@@ -427,17 +427,25 @@
   // ================= models =================
   const WALL = 0x9C9A8A, ROOF = 0x686A62, MET = 0x41443E, CONC = 0x74756E, BAG = 0xA3966C;
   const crystGeo = new THREE.ConeGeometry(0.085, 0.5, 5); crystGeo.translate(0, 0.25, 0);
+  // moving parts collected while a unit model is built: wheels spin, track links slide, legs and arms swing
+  let rig = null;
   function tracks(g, len, x, h, w) {
     bx(g, w, h, len, 0x262722, x, h / 2, 0);
-    for (let i = 0; i < 4; i++) { const wh = cy(g, h * 0.38, h * 0.38, w + 0.03, 0x45473F, x, h * 0.45, -len / 2 + 0.14 + i * (len - 0.28) / 3, 10); wh.rotation.z = Math.PI / 2; }
+    for (let i = 0; i < 4; i++) { const wh = cy(g, h * 0.38, h * 0.38, w + 0.03, 0x45473F, x, h * 0.45, -len / 2 + 0.14 + i * (len - 0.28) / 3, 10); wh.rotation.z = Math.PI / 2; if (rig) { rig.wheels.push({ m: wh, r: h * 0.38 }); } }
+    if (rig) { const n = 7; for (let i = 0; i < n; i++) { const c = bx(g, w * 0.9, 0.012, 0.035, 0x51534A, x, h + 0.006, 0); c.castShadow = false; rig.links.push({ m: c, len, z0: i * len / n }); } }
   }
-  function wheel(g, r, w, x, y, z) { const m = cy(g, r, r, w, 0x1E1E1C, x, y, z, 12); m.rotation.z = Math.PI / 2; return m; }
+  function wheel(g, r, w, x, y, z) { const m = cy(g, r, r, w, 0x1E1E1C, x, y, z, 12); m.rotation.z = Math.PI / 2; if (rig) { rig.wheels.push({ m, r }); } return m; }
+  const limb = (g, w, h, d, c, x, y, z) => { const p = new THREE.Group(); p.position.set(x, y, z); g.add(p); bx(p, w, h, d, c, 0, -h / 2, 0); return p; };
   function sandbags(g, pts) { pts.forEach(([x, z, r]) => { const b = bx(g, 0.22, 0.12, 0.12, BAG, x, 0.16, z); b.rotation.y = r || 0; }); }
   function unitModel(type, o) {
     const c = COL[o], d = UNIT[type], g = new THREE.Group(), body = new THREE.Group(); g.add(body);
     let turret = null, cargo = null;
+    rig = { wheels: [], links: [], legs: [], arms: [] };
     if (d.armor === 'inf') {
-      bx(body, 0.075, 0.2, 0.08, 0x34352E, -0.05, 0.1, 0); bx(body, 0.075, 0.2, 0.08, 0x34352E, 0.05, 0.1, 0);
+      // legs and arms hang from hip and shoulder pivots so they can swing
+      rig.legs.push(limb(body, 0.075, 0.2, 0.08, 0x34352E, -0.05, 0.2, 0), limb(body, 0.075, 0.2, 0.08, 0x34352E, 0.05, 0.2, 0));
+      const sleeve = type === 'eng' ? 0xD9782A : c.uniform;
+      rig.arms.push(limb(body, 0.05, 0.18, 0.06, sleeve, -0.125, 0.4, 0), limb(body, 0.05, 0.18, 0.06, sleeve, 0.125, 0.4, 0));
       bx(body, 0.2, 0.22, 0.13, type === 'eng' ? 0xD9782A : c.uniform, 0, 0.31, 0);
       bx(body, 0.205, 0.04, 0.135, 0x2B2A22, 0, 0.27, 0);
       sp(body, 0.068, 0xC99C78, 0, 0.48, 0); sp(body, 0.078, type === 'eng' ? 0xE8C547 : c.dark, 0, 0.5, 0, true);
@@ -482,7 +490,7 @@
       bx(body, 0.69, 0.06, 0.2, c.trim, 0, 0.45, -0.18);
       bx(body, 0.4, 0.3, 0.3, c.body, -0.12, 0.48, 0.36);
       bx(body, 0.32, 0.09, 0.02, 0x1A2630, -0.12, 0.55, 0.515);
-      const drum = cy(body, 0.13, 0.13, 0.74, 0x4A4C46, 0, 0.18, 0.62, 12); drum.rotation.z = Math.PI / 2;
+      const drum = cy(body, 0.13, 0.13, 0.74, 0x4A4C46, 0, 0.18, 0.62, 12); drum.rotation.z = Math.PI / 2; rig.wheels.push({ m: drum, r: 0.06 });
       cargo = new THREE.Group(); cargo.position.set(0, 0.72, -0.18); body.add(cargo);
       for (let i = 0; i < 5; i++) { const m = new THREE.Mesh(crystGeo, M(0x56E04A, 0x2E9A22)); m.position.set((i % 3 - 1) * 0.18, 0, (Math.floor(i / 3) - 0.5) * 0.22); m.scale.set(1.2, 0.6, 1.2); cargo.add(m); }
     } else if (type === 'mcv') {
@@ -493,7 +501,8 @@
       bx(body, 0.07, 0.07, 0.9, c.trim, 0.22, 0.81, -0.2); bx(body, 0.2, 0.12, 0.16, MET, 0.22, 0.85, 0.24);
       cy(body, 0.12, 0.12, 0.04, 0xD8DCD2, -0.18, 0.8, -0.45, 12);
     }
-    return { g, body, turret, cargo };
+    const parts = rig; rig = null;
+    return { g, body, turret, cargo, rig: parts };
   }
   function bldModel(type, o) {
     const c = COL[o], d = BLD[type], g = new THREE.Group();
@@ -770,6 +779,9 @@
     tower: { 0: { src: 'art/S09-vanguard.webp', w: 1024, h: 883, ax: 516, ay: 576, ppt: 1000 } },
     atower: { 0: { src: 'art/S10-vanguard.webp', w: 1024, h: 1196, ax: 515, ay: 880, ppt: 984 } },
   };
+  // painted unit pictures (art/units, from the ChatGPT package) for the sidebar; the battlefield keeps the animated 3D models
+  const UNIT_ICON = Object.fromEntries(['rifle', 'gren', 'rocket', 'eng', 'buggy', 'ltank', 'tank', 'htank', 'arty', 'harv', 'mcv']
+    .map((t, i) => [t, `art/units/U${String(i + 1).padStart(2, '0')}-vanguard.webp`]));
   const artTex = {};
   Object.values(ART).forEach(byOwner => Object.values(byOwner).forEach(a => {
     new THREE.TextureLoader().load(a.src, t => { t.anisotropy = 4; artTex[a.src] = t; ents.forEach(e => { if (e.kind === 'bld' && !e.dead && !e.art) { applyArt(e); } }); }, undefined, () => { /* keep the 3D model */ });
@@ -830,8 +842,9 @@
   function addUnit(o, type, x, z) {
     const d = UNIT[type], m = unitModel(type, o);
     const u = { id: nextId++, kind: 'unit', type, def: d, owner: o, x, z, hp: d.hp, maxhp: d.hp, facing: o === 0 ? Math.PI : 0, aim: o === 0 ? Math.PI : 0,
-      path: null, pi: 0, order: null, target: null, cd: rand() * 0.5, acq: rand() * 0.3, repath: 0, moving: false, walk: rand() * 6, smokeT: rand(),
-      home: { x, z }, obj: m.g, body: m.body, turret: m.turret, cargo: m.cargo };
+      path: null, pi: 0, order: null, target: null, cd: rand() * 0.5, acq: rand() * 0.3, repath: 0, moving: false, smokeT: rand(),
+      home: { x, z }, obj: m.g, body: m.body, turret: m.turret, cargo: m.cargo, rig: m.rig, turretBase: m.turret ? m.turret.position.clone() : null,
+      spd: 0, acc: 0, odo: 0, recoil: 0, shotT: -9, idleT: rand() * 3, wq: null };
     if (type === 'harv') { u.harv = { state: 'seek', cargo: 0, tile: -1, timer: 0.6, ref: null }; }
     u.ring = makeBracket(d.r > 0.4 ? d.r * 2.3 : 0.62, o); u.ring.position.y = d.h * 0.45; m.g.add(u.ring);
     contactShadow(m.g, d.r * 2.4, d.r * (d.armor === 'inf' ? 2.4 : 3.2));
@@ -1037,7 +1050,7 @@
   const projMats = { shell: glow(0xFFD25A, 3), rocket: basic(0xF2F2E8), missile: basic(0xF2F2E8), grenade: basic(0x3A3A30), artillery: basic(0x2A2A24) };
   function fire(s, t) {
     const W = s.def.weapon, dmg = s.def.dmg, from = muzzle(s), to = aimPoint(t);
-    flash(from);
+    flash(from); s.recoil = 1; s.shotT = gameTime;
     if (W === 'bullet' || W === 'tower') {
       tracer(from, to); sfx('gun', s.x, s.z);
       damage(t, dmg, W, s);
@@ -1272,19 +1285,27 @@
   // ================= units: movement / behaviour =================
   function angDiff(a, b) { return ((b - a + Math.PI) % (2 * Math.PI) + 2 * Math.PI) % (2 * Math.PI) - Math.PI; }
   function turnTo(a, b, max) { const d = angDiff(a, b); return Math.abs(d) <= max ? b : a + Math.sign(d) * max; }
+  // infantry reach full speed almost at once; vehicles take about half a second
+  const unitAccel = u => u.def.speed * (u.def.armor === 'inf' ? 9 : 2.4);
   function followPath(u, dt) {
     u.moving = false;
-    if (!u.path) { return; }
+    if (!u.path) { u.spd = Math.max(0, u.spd - unitAccel(u) * 2 * dt); return; }
     if (u.pi >= u.path.length) { u.path = null; return; }
     const wp = u.path[u.pi];
     if (!passable(Math.floor(wp.x), Math.floor(wp.z))) { const f = u.path[u.path.length - 1]; if (!pathTo(u, f.x, f.z)) { u.path = null; } return; }
-    const dx = wp.x - u.x, dz = wp.z - u.z, dist = Math.hypot(dx, dz), step = u.def.speed * dt;
+    const dx = wp.x - u.x, dz = wp.z - u.z, dist = Math.hypot(dx, dz);
     if (dist < 1e-4) { u.pi++; if (u.pi >= u.path.length) { u.path = null; } return; }
-    const want = Math.atan2(dx, dz);
+    const want = Math.atan2(dx, dz), A = unitAccel(u);
     u.facing = turnTo(u.facing, want, dt * u.def.turn);
-    // vehicles turn in place before driving off
-    if (u.def.armor !== 'inf' && Math.abs(angDiff(u.facing, want)) > 0.55) { return; }
-    u.moving = true;
+    // tracked vehicles turn in place before driving off; wheeled ones turn while rolling
+    const off = Math.abs(angDiff(u.facing, want)), wheeled = u.type === 'buggy' || u.type === 'mcv';
+    if (u.def.armor !== 'inf' && off > (wheeled ? 1.2 : 0.55)) { u.spd = Math.max(0, u.spd - A * 2 * dt); return; }
+    // speed up to top speed, ease off for sharp turns and brake into the last waypoint
+    const f = u.path[u.path.length - 1], left = Math.hypot(f.x - u.x, f.z - u.z);
+    const vmax = Math.min(u.def.speed, Math.sqrt(2 * A * left) + u.def.speed * 0.2) * (1 - Math.min(off, 1) * 0.4);
+    u.spd = u.spd < vmax ? Math.min(vmax, u.spd + A * dt) : Math.max(vmax, u.spd - A * 2 * dt);
+    const step = u.spd * dt;
+    u.moving = true; u.odo += Math.min(step, dist);
     if (dist <= step) { u.x = wp.x; u.z = wp.z; u.pi++; if (u.pi >= u.path.length) { u.path = null; } }
     else { u.x += dx / dist * step; u.z += dz / dist * step; }
   }
@@ -1295,7 +1316,11 @@
       if (Math.abs(e.x - u.x) < 0.45 && Math.abs(e.z - u.z) < 0.45 && Math.hypot(e.x - u.x, e.z - u.z) < 0.42) { e.crushed = true; kill(e); }
     }
   }
-  function settle(u) { u.order = null; u.home = { x: u.x, z: u.z }; }
+  function settle(u) {
+    // a finished move goes on to the next Shift-queued waypoint, if any
+    if (u.wq && u.order && u.order.type === 'move') { const w = u.wq.shift(); if (!u.wq.length) { u.wq = null; } moveOrder(u, w.x, w.z, true); return; }
+    u.order = null; u.home = { x: u.x, z: u.z };
+  }
   function updateUnit(u, dt) {
     const d = u.def;
     if (d.armor === 'inf' && crystal[tileOf(u)] > 0) { u.hp -= 2.5 * dt; if (u.hp <= 0) { kill(u); return; } }
@@ -1344,7 +1369,7 @@
     }
     followPath(u, dt);
     if (d.crush) { crush(u); }
-    if (u.turret && !firing) { u.aim = turnTo(u.aim, u.facing, dt * 3); }
+    if (u.turret && !firing && gameTime - u.shotT > 1.2) { u.aim = turnTo(u.aim, u.facing, dt * 2.5); }
     if (u.order && u.order.type === 'move' && !u.path) { settle(u); }
   }
   function findCrystal(x, z, exclude, maxR) {
@@ -1779,8 +1804,14 @@
   }
   function toggleSel(e) { if (sel.has(e)) { sel.delete(e); e.ring.visible = false; } else { sel.add(e); e.ring.visible = true; } selSig = ''; }
   const ownSelUnits = () => [...sel].filter(e => !e.dead && e.kind === 'unit' && e.owner === 0);
-  function command(gp, picked, force) {
+  // Shift + right-click on open ground adds a waypoint after the current move instead of replacing it
+  function queueMove(u, x, z) {
+    if (u.order && u.order.type === 'move' && u.path) { (u.wq = u.wq || []).push({ x, z }); } else { moveOrder(u, x, z, true); }
+  }
+  function command(gp, picked, force, queue) {
     const units = ownSelUnits();
+    const queued = queue && !force && !(picked && (picked.owner === 1 || picked.type === 'repair' || picked.type === 'refinery'));
+    if (!queued) { units.forEach(u => { u.wq = null; }); }
     if (!units.length) {
       const b = [...sel][0];
       if (b && !b.dead && b.kind === 'bld' && b.owner === 0 && (b.type === 'barracks' || b.type === 'factory')) { b.rally = { x: gp.x, z: gp.z }; marker(gp.x, gp.z, 0xE3B341); say('Rally point set'); sfx('ack'); }
@@ -1832,17 +1863,18 @@
       tiles.slice(veh.length).forEach(t => SUB.forEach(([ox, oz]) => slotsI.push({ x: t.x + ox, z: t.z + oz })));
       const assign = (group, slots) => {
         group.slice().sort((a, b) => Math.hypot(a.x - gp.x, a.z - gp.z) - Math.hypot(b.x - gp.x, b.z - gp.z)).forEach(u => {
-          if (!slots.length) { moveOrder(u, gp.x, gp.z); return; }
-          let bi = 0, bd = 1e9; slots.forEach((g, i) => { const d = Math.hypot(g.x - u.x, g.z - u.z); if (d < bd) { bd = d; bi = i; } });
-          const g = slots.splice(bi, 1)[0]; moveOrder(u, g.x, g.z, true);
+          if (!slots.length) { if (queued) { queueMove(u, gp.x, gp.z); } else { moveOrder(u, gp.x, gp.z); } return; }
+          const from = queued && u.wq ? u.wq[u.wq.length - 1] : queued && u.order && u.order.type === 'move' ? u.order : u;
+          let bi = 0, bd = 1e9; slots.forEach((g, i) => { const d = Math.hypot(g.x - from.x, g.z - from.z); if (d < bd) { bd = d; bi = i; } });
+          const g = slots.splice(bi, 1)[0]; if (queued) { queueMove(u, g.x, g.z); } else { moveOrder(u, g.x, g.z, true); }
         });
       };
       assign(veh, slotsV); assign(inf, slotsI);
     }
     marker(gp.x, gp.z, 0x9BEA6E);
   }
-  function stopSel() { ownSelUnits().forEach(u => { u.target = null; u.path = null; settle(u); if (u.harv) { u.harv.state = 'manual'; } }); }
-  function guardSel() { ownSelUnits().forEach(u => { if (u.def.dmg > 0) { u.path = null; u.target = null; u.order = { type: 'guard' }; u.home = { x: u.x, z: u.z }; } }); say('Guarding area'); }
+  function stopSel() { ownSelUnits().forEach(u => { u.target = null; u.path = null; u.wq = null; settle(u); if (u.harv) { u.harv.state = 'manual'; } }); }
+  function guardSel() { ownSelUnits().forEach(u => { if (u.def.dmg > 0) { u.path = null; u.wq = null; u.target = null; u.order = { type: 'guard' }; u.home = { x: u.x, z: u.z }; } }); say('Guarding area'); }
   function scatterSel() {
     ownSelUnits().forEach(u => {
       const a = rand() * Math.PI * 2, r = 1 + rand() * 1.5, x = u.x + Math.cos(a) * r, z = u.z + Math.sin(a) * r;
@@ -1976,7 +2008,7 @@
       return;
     }
     const picked = pick(p.x, p.y, touch);
-    if (button === 2) { if (sel.size) { command(gp, picked, ctrl); } return; }
+    if (button === 2) { if (sel.size) { command(gp, picked, ctrl, shift); } return; }
     const us = ownSelUnits(), hasUnits = us.length > 0;
     const selProducer = [...sel].find(e => e.kind === 'bld' && e.owner === 0 && (e.type === 'barracks' || e.type === 'factory'));
     if (picked && picked.owner === 0) {
@@ -2091,7 +2123,7 @@
     const mk = (type, isUnit, list) => {
       const d = isUnit ? UNIT[type] : BLD[type];
       const b = document.createElement('button'); b.type = 'button'; b.className = 'card'; b.title = `${d.name} · $${d.cost}\n${d.desc}`;
-      b.innerHTML = `<span class="ico"><img alt="" src="${(!isUnit && ART[type] && ART[type][0]) ? ART[type][0].src : thumbs[type]}"><span class="wipe"></span><span class="ov"></span></span><span class="nm">${d.name}</span><span class="sub"></span><span class="badge" hidden></span>`;
+      b.innerHTML = `<span class="ico"><img alt="" src="${isUnit ? (UNIT_ICON[type] || thumbs[type]) : (ART[type] && ART[type][0]) ? ART[type][0].src : thumbs[type]}"><span class="wipe"></span><span class="ov"></span></span><span class="nm">${d.name}</span><span class="sub"></span><span class="badge" hidden></span>`;
       b.addEventListener('click', () => { initAudio(); if (isUnit) { unitCard(type); } else { structCard(type); } refreshUI(); });
       b.addEventListener('contextmenu', e => { e.preventDefault(); if (isUnit) { unitCancel(type); } else { structCancel(type); } refreshUI(); });
       list.appendChild(b); cardEls[type] = b;
@@ -2267,6 +2299,54 @@
 
   // ================= per-frame visuals =================
   const artUp = new THREE.Vector3(), artRight = new THREE.Vector3();
+  // walk cycles, rolling wheels and tracks, suspension, recoil and idle fidgets, all driven by distance travelled
+  function animateUnit(e, dt) {
+    const R = e.rig, inf = e.def.armor === 'inf', live = state === 'play' && !paused;
+    e.acc += ((e.spd - (e.prevSpd || 0)) / Math.max(dt, 1e-3) - e.acc) * Math.min(1, dt * 8); e.prevSpd = e.spd;
+    e.recoil = Math.max(0, e.recoil - dt * (inf ? 7 : 4));
+    const k = e.recoil * e.recoil;
+    if (inf) {
+      const walking = e.spd > 0.05, ph = e.odo * 9, sw = walking ? Math.sin(ph) * Math.min(1, e.spd / e.def.speed) : 0;
+      R.legs[0].rotation.x = sw * 0.7; R.legs[1].rotation.x = -sw * 0.7;
+      R.arms[0].rotation.x = -sw * 0.5; R.arms[1].rotation.x = e.def.dmg > 0 && !walking ? -0.9 : sw * 0.5;
+      e.body.position.y = walking ? Math.abs(Math.cos(ph)) * 0.025 : 0;
+      e.body.position.z = -k * 0.05; e.body.rotation.x = walking ? 0.08 : -k * 0.15;
+      if (!walking && live) {
+        // idle: breathe, and now and then glance around
+        e.idleT -= dt; if (e.idleT < -1.6) { e.idleT = 2 + rand() * 4; e.look = (rand() - 0.5) * 1.2; }
+        e.body.rotation.y += ((e.idleT < 0 ? e.look || 0 : 0) - e.body.rotation.y) * Math.min(1, dt * 4);
+        e.body.scale.y = 0.9 * (1 + Math.sin(gameTime * 2.2 + e.id) * 0.012);
+      } else { e.body.rotation.y *= Math.max(0, 1 - dt * 8); e.body.scale.y = 0.9; }
+      return;
+    }
+    R.wheels.forEach(w => { w.m.rotation.x = e.odo / w.r; });
+    R.links.forEach(l => { l.m.position.z = ((l.z0 + e.odo) % l.len + l.len) % l.len - l.len / 2; });
+    // the hull squats when pulling away, dips when braking, rocks back on a shot and hums when idle
+    const pitch = clamp(-e.acc * 0.012, -0.06, 0.06) - k * 0.05;
+    e.body.rotation.x += (pitch - e.body.rotation.x) * Math.min(1, dt * 10);
+    e.body.position.y = e.spd > 0.05 ? Math.sin(e.odo * 14) * 0.006 : live ? Math.sin(gameTime * 38 + e.id) * 0.0025 : 0;
+    if (e.turret && e.turretBase) {
+      const a = e.aim - e.facing, kick = k * (e.type === 'buggy' ? 0.025 : 0.09);
+      e.turret.position.set(e.turretBase.x - Math.sin(a) * kick, e.turretBase.y, e.turretBase.z - Math.cos(a) * kick);
+    }
+  }
+  // queued waypoints of the selected units, drawn as a line on the ground
+  const wpMax = 600, wpPos = new Float32Array(wpMax * 3);
+  const wpLine = new THREE.LineSegments(new THREE.BufferGeometry(), new THREE.LineBasicMaterial({ color: 0x9BEA6E, transparent: true, opacity: 0.75, depthTest: false }));
+  wpLine.geometry.setAttribute('position', new THREE.BufferAttribute(wpPos, 3)); wpLine.renderOrder = 50; wpLine.frustumCulled = false; scene.add(wpLine);
+  function drawWaypoints() {
+    let n = 0;
+    const seg = (a, b) => { if (n + 2 > wpMax) { return; } wpPos.set([a.x, 0.07, a.z, b.x, 0.07, b.z], n * 3); n += 2; };
+    if (state === 'play') {
+      sel.forEach(u => {
+        if (u.dead || u.kind !== 'unit' || !u.wq) { return; }
+        let prev = u.order && u.order.type === 'move' ? u.order : u;
+        if (prev !== u) { seg(u, prev); }
+        u.wq.forEach(w => { seg(prev, w); const r = 0.18; seg({ x: w.x - r, z: w.z }, { x: w.x + r, z: w.z }); seg({ x: w.x, z: w.z - r }, { x: w.x, z: w.z + r }); prev = w; });
+      });
+    }
+    wpLine.geometry.setDrawRange(0, n); wpLine.geometry.attributes.position.needsUpdate = true;
+  }
   // sparks along the weld line, dust kicked up around the foundation, and welding and clanking sounds
   function buildFx(e, dt) {
     let x = e.x, y = Math.max(0.1, (1 - Math.pow(1 - e.rise, 3)) * 1.1), z = e.z, ux = 0, uz = 0, rx = 1, rz = 0;
@@ -2299,7 +2379,7 @@
       if (e.kind === 'unit') {
         e.obj.position.set(e.x, 0, e.z); e.obj.rotation.y = e.facing;
         if (e.turret) { e.turret.rotation.y = e.aim - e.facing; }
-        if (e.def.armor === 'inf') { e.walk += e.moving ? dt * 12 : 0; e.body.position.y = e.moving ? Math.abs(Math.sin(e.walk)) * 0.04 : 0; }
+        animateUnit(e, dt);
         if (e.cargo) { const c = e.harv.cargo / CAP; e.cargo.visible = c > 0.02; e.cargo.scale.setScalar(0.4 + c * 0.6); }
         if (live && vis && e.def.armor !== 'inf' && k < 0.4) {
           e.smokeT -= dt;
@@ -2480,7 +2560,7 @@
       updateFx(raw);
     }
     updateCamera();
-    syncVisuals(raw);
+    syncVisuals(raw); drawWaypoints();
     if (composer) { composer.render(); } else { renderer.render(scene, camera); }
     requestAnimationFrame(frame);
   }
