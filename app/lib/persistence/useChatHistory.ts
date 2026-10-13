@@ -19,6 +19,7 @@ import {
 import { createMessage, getMessageAnnotations, hasMessageFlag, type AnyPart } from './messageMigration';
 import type { Snapshot } from './types';
 import { BRAND } from '~/config/brand';
+import { projectSaved } from '~/lib/projects/save-events';
 import type { FileMap } from '~/lib/stores/files';
 import { logStore } from '~/lib/stores/logs'; // Import logStore
 import { workbenchStore } from '~/lib/stores/workbench';
@@ -429,6 +430,7 @@ ${value.content}
         undefined,
         chatMetadata.get(),
       );
+      projectSaved.set({ id: finalChatId, at: Date.now() });
 
       invalidateChatCache(finalChatId);
 

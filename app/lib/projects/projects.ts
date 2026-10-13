@@ -3,11 +3,26 @@ import type { ChatHistoryItem } from '~/lib/persistence/useChatHistory';
 /** What the "My Apps" dashboard shows for each saved project. */
 export interface ProjectSummary {
   id: string;
-  href: string;
+
+  /** Where to open it; null for a cloud-only project that must be downloaded first. */
+  href: string | null;
   name: string;
   updatedAt: Date;
   messageCount: number;
   stack?: string;
+
+  /** Id in the signed-in user's cloud storage, if it has ever synced. */
+  cloudId?: string;
+
+  /** 'local' = this browser only, 'synced' = also in the cloud, 'cloud' = only in the cloud. */
+  location: 'local' | 'synced' | 'cloud';
+}
+
+export interface CloudProjectMeta {
+  id: string;
+  urlId?: string;
+  description?: string;
+  timestamp: string;
 }
 
 const ARTIFACT_TITLE = /<boltArtifact[^>]*\btitle="([^"]+)"/;
@@ -52,7 +67,42 @@ export function toProjectSummary(item: ChatHistoryItem): ProjectSummary {
     updatedAt: Number.isNaN(timestamp.getTime()) ? new Date(0) : timestamp,
     messageCount: item.messages.length,
     stack: detectStack(assistantText),
+    cloudId: item.metadata?.cloudId,
+    location: 'local',
   };
+}
+
+/**
+ * Combines this browser's projects with the user's cloud projects: local
+ * copies that exist in the cloud are marked 'synced', and cloud projects not
+ * present locally are added as 'cloud' entries.
+ */
+export function mergeCloudProjects(local: ProjectSummary[], cloud: CloudProjectMeta[]): ProjectSummary[] {
+  const cloudIds = new Set(cloud.map((project) => project.id));
+  const localCloudIds = new Set(local.map((project) => project.cloudId).filter(Boolean));
+
+  const merged: ProjectSummary[] = local.map((project) =>
+    project.cloudId && cloudIds.has(project.cloudId) ? { ...project, location: 'synced' } : { ...project },
+  );
+
+  for (const project of cloud) {
+    if (localCloudIds.has(project.id)) {
+      continue;
+    }
+
+    const timestamp = new Date(project.timestamp);
+    merged.push({
+      id: `cloud:${project.id}`,
+      href: null,
+      name: project.description?.trim() || 'Untitled app',
+      updatedAt: Number.isNaN(timestamp.getTime()) ? new Date(0) : timestamp,
+      messageCount: 0,
+      cloudId: project.id,
+      location: 'cloud',
+    });
+  }
+
+  return merged;
 }
 
 export function filterProjects(projects: ProjectSummary[], query: string): ProjectSummary[] {

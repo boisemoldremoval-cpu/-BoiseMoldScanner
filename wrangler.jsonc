@@ -1,11 +1,14 @@
 {
   "$schema": "./node_modules/wrangler/config-schema.json",
-  "name": "bolt",
+  "name": "appforge",
   "main": "./workers/app.ts",
   "compatibility_date": "2026-10-01",
   "compatibility_flags": ["nodejs_compat"],
   "observability": {
     "enabled": true
   },
-  "upload_source_maps": true
+  "upload_source_maps": true,
+  // Cloud project storage for signed-in users. `wrangler deploy` creates the
+  // namespace automatically; local dev and `vite preview` persist it under .wrangler/.
+  "kv_namespaces": [{ "binding": "APP_DATA" }]
 }

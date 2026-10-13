@@ -12,6 +12,7 @@ and build passing.
 | 1 | Independent branding through `app/config/brand.ts` + `VITE_BRAND_*`, new logo/mark, accent palette, README/NOTICE, upstream release workflows removed. |
 | 2 | Claude as default provider (`claude-opus-5-5`), current Claude model list, fix for sampling params rejected by current Claude models. Local models (Ollama, LM Studio, OpenAI-compatible) unchanged and documented. |
 | 2.5 | Replit-style workspace: Run/Stop button, Console view (with "Ask AI to fix" on crash), per-project Secrets injected as env vars, My Apps dashboard, `.appforge` run config. |
+| 3-4 | GitHub sign-in (signed-cookie sessions, CSRF checks) and cloud saving of apps to the account via KV (Cloudflare KV in production, on-disk locally), auto-sync, My Apps merges local and cloud apps. |
 
 ## Already provided by the foundation
 
@@ -24,7 +25,13 @@ platform's servers.
 
 ## Next stages
 
-### Stage 3: platform accounts (authentication)
+### Stage 3/4 follow-ups
+
+- Google and email-link sign-in; per-user rate limits.
+- Share a read-only link to an app; conflict prompt instead of last-write-wins.
+- Postgres storage adapter for Node hosting (implement `KeyValueStore`).
+
+### Stage 3: platform accounts (authentication) — done (GitHub)
 
 Today there is no sign-in; everything lives in the visitor's browser.
 
@@ -35,7 +42,7 @@ Today there is no sign-in; everything lives in the visitor's browser.
 - Optional: platform-provided Claude key with per-user usage metering, so end
   users do not need their own API key.
 
-### Stage 4: cloud project saving
+### Stage 4: cloud project saving — done
 
 - Server-side `projects` and `project_snapshots` tables keyed by user;
   autosave the existing snapshot format (`app/lib/persistence`) alongside
@@ -81,8 +88,8 @@ commercial license (see NOTICE):
 
 1. **Brand name and domain**: the placeholder is "AppForge"; change it in
    `app/config/brand.ts` or with `VITE_BRAND_NAME`.
-2. **Hosting**: Cloudflare Workers (current default; points stages 3-4 at
-   D1 + KV) or a Node/Docker host (points them at Postgres).
+2. **Hosting**: still open. Works on Cloudflare (KV) and Docker (on-disk KV via a
+   mounted volume) today; a Postgres adapter can be added for other hosts.
 3. **WebContainer license**: buy a StackBlitz commercial license, or
    prioritise stage 6 to run code on your own sandboxes.
 4. **Who pays for AI**: users bring their own API keys (current behaviour),

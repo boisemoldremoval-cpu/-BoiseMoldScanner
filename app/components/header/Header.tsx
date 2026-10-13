@@ -1,5 +1,6 @@
 import { useStore } from '@nanostores/react';
 import { ClientOnly } from 'remix-utils/client-only';
+import { AccountMenu } from './AccountMenu.client';
 import { HeaderActionButtons } from './HeaderActionButtons.client';
 import { BRAND } from '~/config/brand';
 import { ChatDescription } from '~/lib/persistence/ChatDescription.client';
@@ -30,6 +31,7 @@ export function Header() {
           My Apps
         </a>
       </div>
+      {!chat.started && <div className="flex-1" />}
       {chat.started && ( // Display ChatDescription and HeaderActionButtons only when the chat has started.
         <>
           <span className="flex-1 px-4 truncate text-center text-bolt-elements-textPrimary">
@@ -44,6 +46,9 @@ export function Header() {
           </ClientOnly>
         </>
       )}
+      <div className="ml-3">
+        <ClientOnly>{() => <AccountMenu />}</ClientOnly>
+      </div>
     </header>
   );
 }

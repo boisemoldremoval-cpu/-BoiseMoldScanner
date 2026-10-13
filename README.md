@@ -31,7 +31,7 @@ AppForge is built on [bolt.diy](https://github.com/stackblitz-labs/bolt.diy) (MI
 | Claude (Anthropic) + 20 other providers | ✅ upstream | `app/lib/modules/llm/providers` |
 | Local open-source models: Ollama, LM Studio, any OpenAI-compatible server | ✅ upstream | same |
 | Isolated execution: WebContainer (browser sandbox, per tab) | ✅ upstream | `app/lib/webcontainer` |
-| Platform sign-in & cloud project storage | 🚧 planned | see [docs/ROADMAP.md](docs/ROADMAP.md) |
+| **Sign in with GitHub** + apps saved to the account (open them on any device) | ✅ new | `app/routes/auth.*`, `app/lib/.server/auth`, `app/lib/projects/cloud-sync.ts` |
 | Server-side container sandbox | 🚧 planned | see [docs/ROADMAP.md](docs/ROADMAP.md) |
 
 ## Quick start
@@ -50,6 +50,30 @@ pnpm dev                     # http://localhost:5173
 - **Ollama**: run `ollama serve`, set `OLLAMA_API_BASE_URL=http://127.0.0.1:11434`.
 - **LM Studio**: start the local server with CORS enabled, set `LMSTUDIO_API_BASE_URL=http://127.0.0.1:1234`.
 - **Any OpenAI-compatible server** (vLLM, llama.cpp, LocalAI, ...): set `OPENAI_LIKE_API_BASE_URL` and `OPENAI_LIKE_API_KEY`.
+
+### Accounts and cloud saving (optional)
+
+Without these settings the app runs local-only, exactly as before.
+
+1. Create a GitHub OAuth App at <https://github.com/settings/developers>.
+   Callback URL: `http://localhost:5173/auth/github/callback` for local use, or
+   `https://YOUR-DOMAIN/auth/github/callback` in production.
+2. Local development: create `.dev.vars` in the project root:
+   ```
+   GITHUB_CLIENT_ID=...
+   GITHUB_CLIENT_SECRET=...
+   SESSION_SECRET=...   # openssl rand -hex 32
+   ```
+3. Cloudflare: `npx wrangler secret put GITHUB_CLIENT_ID` (repeat for the other two),
+   then `pnpm run deploy`. The `APP_DATA` storage is created automatically.
+4. Docker: pass the three variables with `-e`, and mount a volume at `/app/.wrangler`
+   so saved apps survive container restarts.
+
+Signed-in users get a **Sign in** button in the header, a cloud badge on each app in
+**My Apps**, automatic saving after every change, **Save all to account**, and
+**Download & open** for apps saved from another device. Sessions are signed
+cookies; the GitHub token is discarded after sign-in. If the same app is edited on
+two devices, the most recently saved copy wins.
 
 ## Scripts
 

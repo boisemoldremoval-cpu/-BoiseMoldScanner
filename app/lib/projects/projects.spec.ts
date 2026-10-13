@@ -1,5 +1,12 @@
 import { describe, expect, it } from 'vitest';
-import { detectStack, filterProjects, formatRelative, sortByRecent, toProjectSummary } from './projects';
+import {
+  detectStack,
+  filterProjects,
+  formatRelative,
+  mergeCloudProjects,
+  sortByRecent,
+  toProjectSummary,
+} from './projects';
 import type { ChatHistoryItem } from '~/lib/persistence/useChatHistory';
 
 function chat(overrides: Partial<ChatHistoryItem>): ChatHistoryItem {
@@ -48,9 +55,25 @@ describe('detectStack', () => {
 
 describe('filterProjects / sortByRecent', () => {
   const projects = [
-    { id: 'a', href: '', name: 'Recipe finder', updatedAt: new Date(1), messageCount: 1, stack: 'Vue' },
-    { id: 'b', href: '', name: 'Kanban', updatedAt: new Date(3), messageCount: 1, stack: 'React' },
-    { id: 'c', href: '', name: 'Blog', updatedAt: new Date(2), messageCount: 1 },
+    {
+      id: 'a',
+      href: '',
+      name: 'Recipe finder',
+      updatedAt: new Date(1),
+      messageCount: 1,
+      stack: 'Vue',
+      location: 'local' as const,
+    },
+    {
+      id: 'b',
+      href: '',
+      name: 'Kanban',
+      updatedAt: new Date(3),
+      messageCount: 1,
+      stack: 'React',
+      location: 'local' as const,
+    },
+    { id: 'c', href: '', name: 'Blog', updatedAt: new Date(2), messageCount: 1, location: 'local' as const },
   ];
 
   it('matches name or stack, case-insensitively', () => {
@@ -76,5 +99,45 @@ describe('formatRelative', () => {
     [86400 * 400, '1 year ago'],
   ])('%s seconds -> %s', (seconds, expected) => {
     expect(formatRelative(new Date(now.getTime() - seconds * 1000), now)).toBe(expected);
+  });
+});
+
+describe('mergeCloudProjects', () => {
+  const local = [
+    {
+      id: '1',
+      href: '/chat/a',
+      name: 'Synced',
+      updatedAt: new Date(5),
+      messageCount: 2,
+      cloudId: 'c1',
+      location: 'local' as const,
+    },
+    {
+      id: '2',
+      href: '/chat/b',
+      name: 'Local only',
+      updatedAt: new Date(4),
+      messageCount: 2,
+      location: 'local' as const,
+    },
+  ];
+
+  it('marks synced copies and adds cloud-only projects', () => {
+    const merged = mergeCloudProjects(local, [
+      { id: 'c1', description: 'Synced', timestamp: '2026-10-01T00:00:00Z' },
+      { id: 'c2', description: ' Phone app ', timestamp: '2026-10-02T00:00:00Z' },
+    ]);
+
+    expect(merged.map((p) => [p.name, p.location, p.href])).toEqual([
+      ['Synced', 'synced', '/chat/a'],
+      ['Local only', 'local', '/chat/b'],
+      ['Phone app', 'cloud', null],
+    ]);
+    expect(merged[2]).toMatchObject({ id: 'cloud:c2', cloudId: 'c2' });
+  });
+
+  it('leaves local projects whose cloud copy was deleted as local', () => {
+    expect(mergeCloudProjects(local, []).map((p) => p.location)).toEqual(['local', 'local']);
   });
 });
