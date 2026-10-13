@@ -106,9 +106,12 @@ total_rows = sum(len(r) for _, _, r in SECTIONS)
 story = [Paragraph('Iron Frontier: Game Image List', st['title']),
          Paragraph(f'Every image the game uses, in {total_rows} entries. Each entry gives an ID, what the image shows, where it appears in the game, '
                    'and the size to make it. Name your files by ID and version, for example <b>S01-vanguard.png</b>, <b>S01-red.png</b> or <b>S01-icon.png</b>.', st['sub']),
-         Paragraph('<b>Camera for all map images:</b> three-quarter top-down view from about 55 degrees, facing the lower left, sun from the upper left. '
+         Paragraph('<b>Camera for all map images:</b> classic overhead view. The camera is directly in front of the object (not turned to a corner) and looks down '
+                   'at about 58 degrees, so the front faces the bottom of the image and the base is a level rectangle. Sun from the upper left. '
                    '<b>Factions:</b> Vanguard is olive drab (#8A8457) with gold trim (#D9AE3A); Red Dominion is gunmetal (#58595D) with red trim (#B3261E). '
-                   'Map images and icons need transparent backgrounds unless noted.', st['note'])]
+                   'Map images and icons need transparent backgrounds unless noted.', st['note']),
+         Image(os.path.join(HERE, 'camera-reference.png'), width=4.4 * inch, height=4.4 * inch * 760 / 980),
+         Paragraph('The game as it looks now: match this camera angle, not the shapes. Attach this picture in ChatGPT if it helps.', st['note'])]
 widths = [0.45 * inch, 1.15 * inch, 1.2 * inch, 2.15 * inch, 1.35 * inch, 1.5 * inch]
 for title, note, rows in SECTIONS:
     story += [Spacer(1, 8), Paragraph(f'{title} ({len(rows)})', st['h1']), Paragraph(note, ParagraphStyle('nk', parent=st['note'], keepWithNext=1))]

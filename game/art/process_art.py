@@ -3,10 +3,11 @@
 usage: python3 process_art.py <input.png> <ID-version> <footprint_w> <footprint_h>
 e.g.   python3 process_art.py upload.png S02-vanguard 2 2
 
-Writes source/<name>-original.png, source/<name>-clean.png and <name>.webp (1152 px wide),
-then prints an ART entry: ax, ay = pixel at the footprint centre, ppt = pixels per map tile.
-The footprint is found from the left-most, right-most and bottom-most solid pixels, which are
-the corners of the building's base in an isometric picture.
+For the game's straight-on camera (looking north, about 58 degrees down). The building's base
+shows as a level rectangle: its width is measured across the lower part of the picture, and its
+front edge is the bottom of the solid pixels. Writes source/<name>-original.png,
+source/<name>-clean.png and <name>.webp (1152 px wide), then prints an ART entry:
+ax, ay = pixel at the footprint centre on the ground, ppt = pixels per map tile.
 """
 import math
 import os
@@ -15,7 +16,7 @@ import sys
 import numpy as np
 from PIL import Image, ImageFilter
 
-YAW = 0.68  # must match the game camera
+PITCH = 1.02  # must match the game camera
 src, name, fw, fh = sys.argv[1], sys.argv[2], float(sys.argv[3]), float(sys.argv[4])
 here = os.path.dirname(os.path.abspath(__file__))
 os.makedirs(os.path.join(here, 'source'), exist_ok=True)
@@ -38,19 +39,14 @@ H = round(clean.height * W / clean.width)
 small = clean.resize((W, H), Image.LANCZOS)
 small.save(os.path.join(here, f'{name}.webp'), 'WEBP', quality=88, method=6)
 
-sa = np.array(small)[..., 3] > 128
-ys, xs = np.where(sa)
-left = (xs.min(), ys[xs == xs.min()].mean())
-right = (xs.max(), ys[xs == xs.max()].mean())
-bottom = (xs[ys == ys.max()].mean(), ys.max())
-# with the camera turned YAW, a w x h footprint spans w*cos + h*sin tiles horizontally
-span_tiles = fw * math.cos(YAW) + fh * math.sin(YAW)
-ppt = (right[0] - left[0]) / span_tiles
-# footprint centre: midpoint of the side corners, nudged so the bottom corner lands where it should
-cx, cy = (left[0] + right[0]) / 2, (left[1] + right[1]) / 2
-print(f'{name}: {W}x{H}, {os.path.getsize(os.path.join(here, name + ".webp"))} bytes')
-# camera elevation implied by the picture: how far the front corner drops below the footprint centre
-pitch_img = math.degrees(math.asin(min(1, 2 * (bottom[1] - cy) / ((fw * math.sin(YAW) + fh * math.cos(YAW)) * ppt))))
-print(f'  picture camera elevation about {pitch_img:.0f} degrees (game uses 29)')
-print(f'  corners L{tuple(round(v) for v in left)} R{tuple(round(v) for v in right)} B{tuple(round(v) for v in bottom)}')
-print(f"  ART entry: {{ src: 'art/{name}.webp', w: {W}, h: {H}, ax: {round(cx)}, ay: {round(cy)}, ppt: {round(ppt)} }}")
+solid = np.array(small)[..., 3] > 128
+ys, xs = np.where(solid)
+top, bottom = ys.min(), ys.max()
+base = solid[int(bottom - (bottom - top) * 0.35):bottom + 1]   # lower 35%: the foundation
+bx = np.where(base.any(axis=0))[0]
+left, right = bx.min(), bx.max()
+ppt = (right - left) / fw
+ax = (left + right) / 2
+ay = bottom - (fh / 2) * math.sin(PITCH) * ppt                   # front edge is half the depth in front of the centre
+print(f'{name}: {W}x{H}, {os.path.getsize(os.path.join(here, name + ".webp"))} bytes; base x {left}-{right}, front edge y {bottom}')
+print(f"  ART entry: {{ src: 'art/{name}.webp', w: {W}, h: {H}, ax: {round(ax)}, ay: {round(ay)}, ppt: {round(ppt)} }}")

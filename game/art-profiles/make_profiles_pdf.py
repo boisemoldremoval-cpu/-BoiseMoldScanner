@@ -25,7 +25,7 @@ ss = {
     'small': ParagraphStyle('small', fontName='Helvetica', fontSize=8.5, leading=12, textColor=MUTED),
     'cell': ParagraphStyle('cell', fontName='Helvetica', fontSize=9, leading=12.2, textColor=INK),
     'cellb': ParagraphStyle('cellb', fontName='Helvetica-Bold', fontSize=9, leading=13, textColor=MUTED),
-    'prompt': ParagraphStyle('prompt', fontName='Courier', fontSize=7.9, leading=10.2, textColor=INK),
+    'prompt': ParagraphStyle('prompt', fontName='Courier', fontSize=7.6, leading=9.8, textColor=INK),
     'cap': ParagraphStyle('cap', fontName='Helvetica', fontSize=8, leading=10, textColor=MUTED, alignment=1),
     'bullet': ParagraphStyle('bullet', fontName='Helvetica', fontSize=10, leading=14.5, textColor=INK, leftIndent=14, bulletIndent=2, spaceAfter=3),
 }
@@ -33,8 +33,7 @@ ss = {
 STYLE = ('Highly detailed pre-rendered 3D game asset for a classic-style 1990s real-time strategy game, '
          'remastered in high resolution. Realistic materials: weathered painted steel, cast concrete, canvas, rubber, burlap. '
          'Crisp silhouette, subtle wear, dust and dirt, muted military palette.')
-CAMERA = ('Camera: three-quarter top-down view from about 55 degrees above the ground, object turned to face the lower left, '
-          'whole object in frame, centered, with a small margin. Lighting: warm sun from the upper left, soft shadow cast toward the lower right.')
+CAMERA = ('Camera: classic overhead strategy-game view. The camera is directly in front of the object (not turned toward a corner) and looks down at about 58 degrees, so the front face points straight at the bottom of the image, the roof is clearly visible, and the base reads as a level rectangle. Whole object in frame, centered, with a small margin. Lighting: warm sun from the upper left, soft shadow cast toward the lower right.')
 OUTPUT = 'Output: square 1024x1024 PNG with a fully transparent background. No text, numbers, logos, insignia or watermarks.'
 VAN = 'Vanguard faction colors: olive-drab tan body (#8A8457), mustard-gold trim stripes (#D9AE3A), dark olive accents (#4F4B32).'
 RED = 'Red Dominion faction colors: gunmetal grey body (#58595D), crimson trim stripes (#B3261E), near-black accents (#2C2D30).'
