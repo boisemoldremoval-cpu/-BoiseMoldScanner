@@ -757,6 +757,8 @@
   const ART = {
     hq: { 0: { src: 'art/S01-vanguard.webp', w: 1152, h: 768, ax: 578, ay: 488, ppt: 270 } },
     power: { 0: { src: 'art/S02-vanguard.webp', w: 1152, h: 768, ax: 580, ay: 462, ppt: 400 } },
+    // the painted refinery includes its unloading dock, so it covers 3 x 3 tiles and sits half a tile toward the front
+    refinery: { 0: { src: 'art/S03-vanguard.webp', w: 1152, h: 768, ax: 576, ay: 483, ppt: 266, oz: 0.5 } },
   };
   const artTex = {};
   Object.values(ART).forEach(byOwner => Object.values(byOwner).forEach(a => {
@@ -768,7 +770,7 @@
     const keep = new Set([b.ring, b.wrench, b.primaryTag, b.rangeRing]);
     b.obj.children.forEach(c => { if (!keep.has(c)) { c.visible = false; } });
     const m = new THREE.Mesh(new THREE.PlaneGeometry(a.w / a.ppt, a.h / a.ppt), new THREE.MeshBasicMaterial({ map: tex, alphaTest: 0.5 }));
-    m.userData.off = { x: (a.ax - a.w / 2) / a.ppt, y: (a.ay - a.h / 2) / a.ppt };
+    m.userData.off = { x: (a.ax - a.w / 2) / a.ppt, y: (a.ay - a.h / 2) / a.ppt, z: a.oz || 0 };
     b.obj.add(m); b.art = m;
   }
   function attachBldModel(b) {
@@ -2252,7 +2254,7 @@
           e.art.quaternion.copy(q);
           artUp.set(0, 1, 0).applyQuaternion(q); artRight.set(1, 0, 0).applyQuaternion(q);
           const o = e.art.userData.off;
-          e.art.position.copy(artUp).multiplyScalar(o.y).addScaledVector(artRight, -o.x);
+          e.art.position.copy(artUp).multiplyScalar(o.y).addScaledVector(artRight, -o.x); e.art.position.z += o.z;
         }
         if (e.dish) {
           if (e.type === 'radar') { if (!lowPower(e.owner)) { e.dish.rotation.y += dt * 1.2; } }
