@@ -83,6 +83,10 @@
   .acts button:hover, .btn2:hover { color: var(--gold); }
   .acts button[aria-pressed="true"] { color: var(--gold); box-shadow: inset 1px 1px 0 var(--edge-lo), inset -1px -1px 0 var(--edge-hi); }
   .acts kbd { font: 11px var(--mono); color: var(--muted); }
+  .modes { display: grid; grid-template-columns: 1fr 1fr; gap: 4px; }
+  .mode { background: linear-gradient(#3A3D3A, #242624); border: 1px solid #060706; box-shadow: inset 1px 1px 0 var(--edge-hi), inset -1px -1px 0 var(--edge-lo); color: var(--fg); font: 700 13px var(--display); letter-spacing: .16em; text-transform: uppercase; padding: 5px 0; cursor: pointer; }
+  .mode[aria-pressed="true"] { color: #0A0B0A; background: linear-gradient(#F0C35A, #C9971F); }
+  .tag.prim { background: var(--gold); color: #0A0B0A; }
   .tag { font: 11px var(--mono); letter-spacing: .1em; padding: 1px 6px; background: var(--red); color: #fff; vertical-align: middle; }
 
   .screen { position: fixed; inset: 0; display: grid; place-items: center; padding-inline: 16px; padding-block: 20px; background: rgba(4, 5, 4, 0.6); overflow-y: auto; }
@@ -133,6 +137,7 @@
     </div>
     <div class="radar"><canvas id="mini" width="192" height="192" aria-label="Radar map"></canvas></div>
     <div class="build">
+      <div class="modes"><button class="mode" id="mRepair" type="button" aria-pressed="false">Repair</button><button class="mode" id="mSell" type="button" aria-pressed="false">Sell</button></div>
       <div class="tabs" role="tablist">
         <button class="tab" id="tabS" role="tab" aria-selected="true" type="button">Build</button>
         <button class="tab" id="tabU" role="tab" aria-selected="false" type="button">Units</button>
@@ -162,6 +167,8 @@
       <dt>S · G · X</dt><dd>Stop · guard area · scatter</dd>
       <dt>Arrows / screen edge</dt><dd>Scroll · mouse wheel zooms</dd>
       <dt>Build icon right click</dt><dd>Put on hold, right-click again to cancel</dd>
+      <dt>Repair · Sell buttons</dt><dd>Then click your structures · right-click to stop</dd>
+      <dt>Double-click a factory</dt><dd>Make it primary: new units come out there</dd>
       <dt>Ctrl+1–5 · 1–5 · H · P</dt><dd>Save / recall groups · home · pause</dd>
     </dl>
     <dl class="keys touch-only">
@@ -242,6 +249,7 @@
     barracks: { name: 'Barracks', w: 2, h: 2, cost: 300, hp: 700, power: -20, req: 'power', sight: 5, desc: 'Trains infantry.' },
     factory:  { name: 'War Factory', w: 3, h: 3, cost: 2000, hp: 1100, power: -30, req: 'refinery', sight: 5, desc: 'Builds vehicles.' },
     radar:    { name: 'Comm Center', w: 2, h: 2, cost: 1000, hp: 900, power: -40, req: 'refinery', sight: 10, desc: 'Turns on the radar map. Unlocks advanced units and defenses.' },
+    repair:   { name: 'Repair Pad', w: 2, h: 2, cost: 1200, hp: 800, power: -30, req: 'factory', sight: 4, walkable: true, desc: 'Vehicles parked on it are repaired for credits. Right-click it with damaged vehicles selected.' },
     tower:    { name: 'Guard Tower', w: 1, h: 1, cost: 500, hp: 500, power: 0, req: 'barracks', sight: 7, range: 6, dmg: 14, rate: 0.7, weapon: 'tower', desc: 'Machine-gun tower. Good against infantry.' },
     atower:   { name: 'Advanced Tower', w: 1, h: 1, cost: 1000, hp: 700, power: -20, req: 'radar', sight: 8, range: 7.5, dmg: 45, rate: 2.0, weapon: 'missile', needsPower: true, desc: 'Missile tower. Good against vehicles. Needs power.' },
     wall:     { name: 'Sandbags', w: 1, h: 1, cost: 50, hp: 250, power: 0, req: 'hq', sight: 1, instant: true, desc: 'Blocks movement. Click repeatedly to lay a line.' },
@@ -256,7 +264,7 @@
     shell:     { inf: 0.45, light: 1, heavy: 1, bld: 0.9 },
     artillery: { inf: 1, light: 0.8, heavy: 0.6, bld: 1 },
   };
-  const STRUCT_LIST = ['power', 'refinery', 'silo', 'barracks', 'factory', 'radar', 'tower', 'atower', 'wall'];
+  const STRUCT_LIST = ['power', 'refinery', 'silo', 'barracks', 'factory', 'radar', 'repair', 'tower', 'atower', 'wall'];
   const UNIT_LIST = ['rifle', 'gren', 'rocket', 'eng', 'buggy', 'ltank', 'tank', 'htank', 'arty', 'harv', 'mcv'];
   const PROD_FROM = { inf: 'barracks', veh: 'factory' };
   const DIFF = {
@@ -271,13 +279,14 @@
   const terrain = new Uint8Array(N * N);   // 0 open, 1 rock, 2 tree
   const crystal = new Float32Array(N * N);
   const bocc = new Int32Array(N * N);       // building id or -1
+  const walk = new Uint8Array(N * N);       // building tiles vehicles can drive onto (repair pad)
   const revealed = new Uint8Array(N * N), visNow = new Uint8Array(N * N);
   const inB = (x, z) => x >= 0 && z >= 0 && x < N && z < N;
-  const passable = (x, z) => inB(x, z) && terrain[z * N + x] === 0 && bocc[z * N + x] < 0;
+  const passable = (x, z) => inB(x, z) && terrain[z * N + x] === 0 && (bocc[z * N + x] < 0 || walk[z * N + x] === 1);
   let mapInfo = null;
 
   function genMap() {
-    terrain.fill(0); crystal.fill(0); bocc.fill(-1); revealed.fill(0); visNow.fill(0);
+    terrain.fill(0); crystal.fill(0); bocc.fill(-1); walk.fill(0); revealed.fill(0); visNow.fill(0);
     const PB = { x: 9, z: 53 }, EB = { x: 54, z: 10 };
     const nearBase = (x, z, r = 9) => Math.hypot(x - PB.x, z - PB.z) < r || Math.hypot(x - EB.x, z - EB.z) < r;
     const fields = [[17, 45, 3.3], [46, 18, 3.3], [32, 32, 4.4], [12, 22, 3], [52, 42, 3], [25, 57, 2.6], [40, 7, 2.6]];
@@ -415,7 +424,12 @@
   }
   function bldModel(type, o) {
     const c = COL[o], d = BLD[type], g = new THREE.Group();
-    let turret = null, dish = null, my = 0.75; const stacks = [];
+    let turret = null, dish = null, door = null, my = 0.75; const stacks = [], gauges = [];
+    const gauge = (x, y, z) => {
+      bx(g, 0.1, 0.44, 0.015, 0x1A1B19, x, y + 0.2, z - 0.012);
+      const gg = new THREE.Group(); gg.position.set(x, y + 0.02, z); g.add(gg);
+      const m = new THREE.Mesh(new THREE.BoxGeometry(0.06, 0.4, 0.02), basic(0x6BE04A)); m.geometry.translate(0, 0.2, 0); gg.add(m); gauges.push(gg);
+    };
     if (type !== 'wall') { bx(g, d.w - 0.04, 0.1, d.h - 0.04, CONC, 0, 0.05, 0); bx(g, d.w - 0.34, 0.02, d.h - 0.34, 0x83847C, 0, 0.11, 0); }
     if (type === 'hq') {
       bx(g, 1.9, 0.72, 1.5, WALL, -0.3, 0.48, -0.3); bx(g, 1.96, 0.07, 1.56, ROOF, -0.3, 0.87, -0.3); bx(g, 1.93, 0.08, 1.53, c.trim, -0.3, 0.7, -0.3);
@@ -438,22 +452,27 @@
       bx(g, 0.8, 0.4, 0.04, MET, -0.45, 0.32, 0.41);
       [-0.45, 0.35].forEach(z => { cy(g, 0.29, 0.29, 1.0, 0xA9A796, 1.0, 0.62, z, 16); sp(g, 0.29, 0xA9A796, 1.0, 1.12, z, true); });
       const pipe = cy(g, 0.05, 0.05, 0.6, MET, 0.55, 0.7, -0.05, 8); pipe.rotation.z = Math.PI / 2;
+      gauge(0.15, 0.15, 0.415);
       bx(g, 0.95, 0.04, 0.95, 0x5E5F59, 0, 0.03, 1.5);
       bx(g, 0.95, 0.05, 0.07, 0xD9AE3A, 0, 0.045, 1.06); bx(g, 0.95, 0.05, 0.07, 0xD9AE3A, 0, 0.045, 1.94);
     } else if (type === 'silo') {
       [-0.45, 0.45].forEach(x => { cy(g, 0.3, 0.3, 0.42, 0xA9A796, x, 0.32, 0, 16); sp(g, 0.3, 0xA9A796, x, 0.53, 0, true); cy(g, 0.305, 0.305, 0.06, c.trim, x, 0.38, 0, 16); });
       const p = cy(g, 0.05, 0.05, 0.3, MET, 0, 0.3, 0, 8); p.rotation.z = Math.PI / 2;
+      gauge(-0.45, 0.12, 0.315); gauge(0.45, 0.12, 0.315);
     } else if (type === 'barracks') {
       const tent = new THREE.Mesh(new THREE.CylinderGeometry(0.58, 0.58, 1.4, 14, 1, false, 0, Math.PI), M(0x5E6B3F));
       tent.rotation.z = Math.PI / 2; tent.position.set(0, 0.12, -0.05); tent.castShadow = tent.receiveShadow = true; g.add(tent);
       [-0.7, 0.7].forEach(x => { const e = new THREE.Mesh(new THREE.CylinderGeometry(0.58, 0.58, 0.03, 14, 1, false, 0, Math.PI), M(0x4E5A33)); e.rotation.z = Math.PI / 2; e.position.set(x, 0.12, -0.05); e.castShadow = true; g.add(e); });
-      bx(g, 0.34, 0.36, 0.04, 0x2B2D27, 0, 0.3, 0.53);
+      bx(g, 0.32, 0.34, 0.02, 0x141513, 0, 0.3, 0.515);
+      door = new THREE.Group(); door.position.set(0, 0.48, 0.545); g.add(door); bx(door, 0.34, 0.36, 0.03, 0x56623F, 0, -0.18, 0);
       sandbags(g, [[-0.75, 0.75], [-0.52, 0.8], [0.52, 0.8], [0.75, 0.75], [-0.85, 0.55, 1.4], [0.85, 0.55, 1.4]]);
       cy(g, 0.015, 0.015, 1.0, 0x8E948A, 0.8, 0.6, -0.75, 6); bx(g, 0.3, 0.18, 0.02, c.trim, 0.95, 1.0, -0.75);
     } else if (type === 'factory') {
       bx(g, 2.6, 0.95, 2.2, WALL, 0, 0.58, -0.2); bx(g, 2.66, 0.08, 2.26, ROOF, 0, 1.08, -0.2); bx(g, 2.63, 0.1, 2.23, c.trim, 0, 0.9, -0.2);
-      bx(g, 1.5, 0.78, 0.05, MET, 0, 0.5, 0.91);
-      for (let i = 0; i < 5; i++) { bx(g, 1.5, 0.015, 0.06, 0x2A2C28, 0, 0.18 + i * 0.15, 0.93); }
+      bx(g, 1.52, 0.8, 0.02, 0x141513, 0, 0.5, 0.905);
+      door = new THREE.Group(); door.position.set(0, 0.89, 0.94); g.add(door);
+      bx(door, 1.5, 0.78, 0.05, MET, 0, -0.39, 0);
+      for (let i = 0; i < 5; i++) { bx(door, 1.5, 0.015, 0.06, 0x2A2C28, 0, -0.71 + i * 0.15, 0.02); }
       [-1.0, 1.0].forEach(x => bx(g, 0.08, 0.5, 0.08, MET, x, 1.35, -0.2)); bx(g, 2.1, 0.08, 0.1, c.trim, 0, 1.6, -0.2);
       cy(g, 0.11, 0.13, 0.8, 0x6E7068, -1.05, 1.45, -1.0, 10); stacks.push(new THREE.Vector3(-1.05, 1.9, -1.0));
       bx(g, 0.5, 0.3, 0.5, MET, 0.9, 1.27, -0.9);
@@ -464,6 +483,11 @@
       cy(dish, 0.05, 0.06, 0.9, MET, 0, 0.45, 0, 8);
       const cone = new THREE.Mesh(new THREE.ConeGeometry(0.42, 0.2, 18, 1, true), new THREE.MeshLambertMaterial({ color: 0xD8DCD2, side: THREE.DoubleSide })); cone.position.set(0, 0.95, 0.06); cone.rotation.x = -1.1; cone.castShadow = true; dish.add(cone);
       cy(dish, 0.015, 0.015, 0.25, 0x222222, 0, 1.0, 0.15, 4).rotation.x = -1.1;
+    } else if (type === 'repair') {
+      bx(g, 1.7, 0.04, 1.7, 0x5E5F59, 0, 0.13, 0);
+      bx(g, 1.2, 0.05, 0.16, 0xD9AE3A, 0, 0.14, 0); bx(g, 0.16, 0.05, 1.2, 0xD9AE3A, 0, 0.14, 0);
+      [[-0.85, -0.85], [0.85, -0.85], [-0.85, 0.85], [0.85, 0.85]].forEach(([x, z]) => { cy(g, 0.04, 0.04, 0.5, MET, x, 0.35, z, 8); const l = new THREE.Mesh(new THREE.SphereGeometry(0.05, 6, 4), basic(0xFFB23A)); l.position.set(x, 0.62, z); g.add(l); });
+      bx(g, 1.74, 0.06, 0.08, c.trim, 0, 0.62, -0.85);
     } else if (type === 'tower') {
       sandbags(g, [[-0.32, -0.32, 0.8], [0.32, -0.32, -0.8], [-0.32, 0.32, -0.8], [0.32, 0.32, 0.8], [0, -0.42], [0, 0.42], [-0.42, 0, 1.57], [0.42, 0, 1.57]]);
       cy(g, 0.26, 0.3, 0.55, 0x8D8B80, 0, 0.38, 0, 12);
@@ -481,7 +505,7 @@
       [[0, -0.12], [0, 0.14]].forEach(([x, z]) => bx(g, 0.86, 0.16, 0.3, BAG, x, 0.24, z));
       bx(g, 0.7, 0.14, 0.4, BAG, 0, 0.39, 0);
     }
-    return { g, turret, dish, stacks, my };
+    return { g, turret, dish, door, stacks, gauges, my };
   }
 
   // ================= world (ground, statics, shroud) =================
@@ -633,24 +657,46 @@
     const s = new THREE.Sprite(new THREE.SpriteMaterial({ map: bracketTex, depthTest: false, transparent: true, color: o === 0 ? 0xFFFFFF : 0xFF8A70 }));
     s.scale.set(size, size, 1); s.renderOrder = 19; s.visible = false; return s;
   }
-  const have = (o, type) => ents.some(e => !e.dead && e.owner === o && e.kind === 'bld' && e.type === type);
-  const countOwn = (o, type) => ents.filter(e => !e.dead && e.owner === o && e.kind === 'bld' && e.type === type).length;
-  const firstOwn = (o, type) => ents.find(e => !e.dead && e.owner === o && e.kind === 'bld' && e.type === type);
+  const have = (o, type) => ents.some(e => !e.dead && !e.selling && e.owner === o && e.kind === 'bld' && e.type === type);
+  const countOwn = (o, type) => ents.filter(e => !e.dead && !e.selling && e.owner === o && e.kind === 'bld' && e.type === type).length;
+  const firstOwn = (o, type) => ents.find(e => !e.dead && !e.selling && e.owner === o && e.kind === 'bld' && e.type === type);
+  const primaryOf = (o, type) => ents.find(e => !e.dead && !e.selling && e.owner === o && e.type === type && e.primary) || firstOwn(o, type);
+  const wrenchTex = (() => {
+    const c = document.createElement('canvas'); c.width = c.height = 64; const g = c.getContext('2d');
+    g.fillStyle = 'rgba(0,0,0,.6)'; g.beginPath(); g.arc(32, 32, 30, 0, 7); g.fill();
+    g.strokeStyle = '#F2C244'; g.lineCap = 'round'; g.lineWidth = 8; g.beginPath(); g.moveTo(20, 44); g.lineTo(38, 26); g.stroke();
+    g.lineWidth = 6; g.beginPath(); g.arc(42, 22, 9, 0.7, 5.5); g.stroke();
+    return new THREE.CanvasTexture(c);
+  })();
+  const primaryTex = (() => {
+    const c = document.createElement('canvas'); c.width = 256; c.height = 64; const g = c.getContext('2d');
+    g.font = 'bold 40px "Share Tech Mono", monospace'; g.textAlign = 'center'; g.textBaseline = 'middle';
+    g.lineWidth = 7; g.strokeStyle = '#000'; g.strokeText('PRIMARY', 128, 34); g.fillStyle = '#FFFFFF'; g.fillText('PRIMARY', 128, 34);
+    return new THREE.CanvasTexture(c);
+  })();
+  const tagSprite = (tex, w, h, y) => { const s = new THREE.Sprite(new THREE.SpriteMaterial({ map: tex, depthTest: false, transparent: true })); s.scale.set(w, h, 1); s.position.y = y; s.renderOrder = 22; s.visible = false; return s; };
   const tileOf = e => clamp(Math.floor(e.z), 0, N - 1) * N + clamp(Math.floor(e.x), 0, N - 1);
   const reqMet = (o, req) => !req || have(o, req);
 
   function attachBldModel(b) {
     const m = bldModel(b.type, b.owner);
-    b.obj = m.g; b.turret = m.turret; b.dish = m.dish; b.stacks = m.stacks; b.my = m.my;
+    b.obj = m.g; b.turret = m.turret; b.dish = m.dish; b.stacks = m.stacks; b.my = m.my; b.door = m.door; b.gauges = m.gauges;
     m.g.position.set(b.x, 0, b.z); world.add(m.g);
     b.ring = makeBracket(Math.max(b.w, b.h) * 1.12, b.owner); b.ring.position.y = 0.7; m.g.add(b.ring);
+    b.rangeRing = null;
+    if (b.def.range) {
+      b.rangeRing = new THREE.Mesh(new THREE.RingGeometry(b.def.range - 0.06, b.def.range, 72), new THREE.MeshBasicMaterial({ color: b.owner === 0 ? 0xFFFFFF : 0xFF8A70, transparent: true, opacity: 0.35, depthWrite: false }));
+      b.rangeRing.rotation.x = -Math.PI / 2; b.rangeRing.position.y = 0.08; b.rangeRing.visible = false; m.g.add(b.rangeRing);
+    }
+    b.wrench = tagSprite(wrenchTex, 0.6, 0.6, 1.75); m.g.add(b.wrench);
+    b.primaryTag = tagSprite(primaryTex, 1.2, 0.3, 1.45); m.g.add(b.primaryTag);
   }
   function addBuilding(o, type, tx, tz) {
     const d = BLD[type];
     const b = { id: nextId++, kind: 'bld', type, def: d, owner: o, tx, tz, w: d.w, h: d.h, x: tx + d.w / 2, z: tz + d.h / 2, hp: d.hp, maxhp: d.hp,
-      rise: 0, cd: 0, acq: 0, aim: 0, target: null, rally: null, smokeT: rand(), repairing: false };
+      rise: 0, cd: 0, acq: 0, aim: 0, target: null, rally: null, smokeT: rand(), repairing: false, doorT: 0, doorK: 0, primary: false, selling: false };
     attachBldModel(b);
-    for (let z = tz; z < tz + d.h; z++) { for (let x = tx; x < tx + d.w; x++) { bocc[z * N + x] = b.id; } }
+    for (let z = tz; z < tz + d.h; z++) { for (let x = tx; x < tx + d.w; x++) { bocc[z * N + x] = b.id; if (d.walkable) { walk[z * N + x] = 1; } } }
     b.hb = makeHB(Math.min(2.2, Math.max(0.6, d.w * 0.75))); world.add(b.hb.g);
     ents.push(b); recompute(o);
     return b;
@@ -669,7 +715,8 @@
   }
   function recompute(o) {
     let p = 0, use = 0, cap = 0;
-    ents.forEach(e => { if (!e.dead && e.owner === o && e.kind === 'bld') { if (e.def.power > 0) { p += e.def.power; } else { use -= e.def.power; } cap += e.def.store || 0; } });
+    // like the original, a damaged power plant puts out proportionally less power
+    ents.forEach(e => { if (!e.dead && !e.selling && e.owner === o && e.kind === 'bld') { if (e.def.power > 0) { p += Math.round(e.def.power * clamp(e.hp / e.maxhp, 0, 1)); } else { use -= e.def.power; } cap += e.def.store || 0; } });
     const pl = players[o]; pl.prod = p; pl.use = use; pl.cap = cap;
     if (o === 0) {
       if (pl.ore > cap) { pl.ore = cap; }
@@ -683,7 +730,7 @@
       } else { pl.wasLow = use > p; pl.radar = radarOn(0); }
     }
   }
-  function freeTiles(b) { for (let z = b.tz; z < b.tz + b.h; z++) { for (let x = b.tx; x < b.tx + b.w; x++) { if (bocc[z * N + x] === b.id) { bocc[z * N + x] = -1; } } } }
+  function freeTiles(b) { for (let z = b.tz; z < b.tz + b.h; z++) { for (let x = b.tx; x < b.tx + b.w; x++) { if (bocc[z * N + x] === b.id) { bocc[z * N + x] = -1; walk[z * N + x] = 0; } } } }
   function spawnSurvivors(b, n) {
     for (let i = 0; i < n; i++) {
       const p = nearestPassable(Math.floor(b.x + (rand() - 0.5) * b.w), Math.floor(b.z + b.h / 2 + 0.5), 4);
@@ -720,7 +767,7 @@
     const tx = Math.floor(u.x) - 1, tz = Math.floor(u.z) - 1;
     for (let z = tz; z < tz + 3; z++) {
       for (let x = tx; x < tx + 3; x++) {
-        if (!passable(x, z) || crystal[z * N + x] > 0) { return fail(); }
+        if (!passable(x, z) || bocc[z * N + x] >= 0 || crystal[z * N + x] > 0) { return fail(); }
         if (ents.some(e => !e.dead && e !== u && e.kind === 'unit' && tileOf(e) === z * N + x)) { return fail(); }
       }
     }
@@ -1269,7 +1316,18 @@
 
   // ================= buildings & production =================
   function updateBuilding(b, dt) {
+    if (b.selling) { b.rise -= dt * 1.3; if (b.rise <= 0) { finishSell(b); } return; }
     if (b.rise < 1) { b.rise = Math.min(1, b.rise + dt * 1.4); }
+    if (b.doorT > 0) { b.doorT -= dt; }
+    if (b.type === 'repair') {
+      const v = ents.find(u => !u.dead && u.kind === 'unit' && u.owner === b.owner && u.def.armor !== 'inf' && !u.moving && u.hp < u.maxhp && Math.abs(u.x - b.x) < 0.8 && Math.abs(u.z - b.z) < 0.8);
+      if (v) {
+        const heal = Math.min(v.maxhp - v.hp, 40 * dt), cost = v.def.cost * 0.5 * heal / v.maxhp, paid = spendUpTo(b.owner, cost);
+        v.hp = Math.min(v.maxhp, v.hp + heal * (cost ? paid / cost : 1));
+        if (paid < cost * 0.99 && b.owner === 0) { noFunds(); }
+        if (rand() < dt * 8) { puff(v.x + (rand() - 0.5) * 0.5, 0.6, v.z + (rand() - 0.5) * 0.5, { color: 0xFFF2A0, size: 0.07, life: 0.25, vy: 0.6, add: true, opacity: 1 }); }
+      }
+    }
     if (b.repairing) {
       if (b.hp >= b.maxhp) { b.repairing = false; selSig = ''; }
       else {
@@ -1293,16 +1351,39 @@
   function spawnFrom(fac, type) {
     const sx = fac.tx + Math.floor(fac.w / 2), sz = fac.tz + fac.h;
     const p = nearestPassable(sx, sz, 8) || { x: sx, z: sz };
-    const u = addUnit(fac.owner, type, p.x + 0.5, p.z + 0.5);
-    u.facing = u.aim = 0;
-    if (fac.owner === 0) {
-      stats.built++;
-      if (fac.rally && type !== 'harv') { moveOrder(u, fac.rally.x + (rand() - 0.5) * 0.6, fac.rally.z + (rand() - 0.5) * 0.6, true); }
-      else if (type !== 'harv') { moveOrder(u, p.x + 0.5 + (rand() - 0.5) * 2, p.z + 2 + rand(), true); }
-    } else if (type !== 'harv') {
-      moveOrder(u, ai.rally.x + (rand() - 0.5) * 4, ai.rally.z + (rand() - 0.5) * 4, true);
-    }
+    // the unit appears just inside the door, which opens, then drives or walks out
+    const u = addUnit(fac.owner, type, fac.tx + fac.w / 2 + (rand() - 0.5) * 0.2, fac.tz + fac.h - 0.35);
+    u.facing = u.aim = 0; fac.doorT = 2.2;
+    let gx = null, gz = null;
+    if (fac.owner === 0) { stats.built++; if (fac.rally && type !== 'harv') { gx = fac.rally.x + (rand() - 0.5) * 0.6; gz = fac.rally.z + (rand() - 0.5) * 0.6; } }
+    else if (type !== 'harv') { gx = ai.rally.x + (rand() - 0.5) * 4; gz = ai.rally.z + (rand() - 0.5) * 4; }
+    if (gx == null) { gx = p.x + 0.5 + (type === 'harv' ? 0 : (rand() - 0.5) * 1.6); gz = p.z + 1.5 + (type === 'harv' ? 0 : rand()); }
+    moveOrder(u, gx, gz, true);
     return u;
+  }
+  function sellBuilding(b) {
+    if (!b || b.dead || b.selling || b.owner !== 0) { return; }
+    players[0].cash += Math.floor(b.def.cost / 2);
+    b.selling = true; b.repairing = false; b.rise = Math.min(b.rise, 1);
+    sel.delete(b); b.ring.visible = false; selSig = '';
+    recompute(0); say(b.def.name + ' sold'); speak('Structure sold'); sfx('click');
+  }
+  function finishSell(b) {
+    removeQuiet(b); freeTiles(b);
+    spawnSurvivors(b, b.type === 'wall' ? 0 : clamp(Math.round(b.def.cost / 700), 1, 3));
+    puff(b.x, 0.4, b.z, { color: 0x8E948A, size: 0.6, life: 1, grow: 2 });
+    recompute(b.owner);
+  }
+  function toggleRepair(b) {
+    if (!b || b.dead || b.selling || b.owner !== 0 || b.type === 'wall') { return; }
+    if (b.hp >= b.maxhp) { b.repairing = false; say('No repairs needed'); selSig = ''; return; }
+    b.repairing = !b.repairing;
+    if (b.repairing) { say('Repairing ' + b.def.name); speak('Repairing'); }
+    selSig = '';
+  }
+  function setPrimary(b) {
+    ents.forEach(e => { if (e.owner === b.owner && e.type === b.type) { e.primary = false; } });
+    b.primary = true; selSig = ''; say(`${b.def.name} set as primary`); speak('Primary building'); sfx('ack');
   }
   let lastFunds = -99;
   function noFunds() { if (gameTime - lastFunds > 6) { lastFunds = gameTime; say('Insufficient funds', 'bad'); speak('Insufficient funds'); } }
@@ -1325,7 +1406,7 @@
     }
     for (const cat of ['inf', 'veh']) {
       const Q = P[cat]; if (!Q.q.length || Q.hold) { continue; }
-      const fac = firstOwn(o, PROD_FROM[cat]); if (!fac) { continue; }
+      const fac = primaryOf(o, PROD_FROM[cat]); if (!fac) { continue; }
       const d = UNIT[Q.q[0]];
       if (advance(o, Q, d.cost, d.time, pf * Math.min(3, countOwn(o, PROD_FROM[cat])), dt)) {
         const type = Q.q.shift(); Q.t = 0; Q.spent = 0; spawnFrom(fac, type);
@@ -1339,7 +1420,7 @@
     const unitTiles = new Set(ents.filter(e => !e.dead && e.kind === 'unit').map(tileOf));
     for (let z = tz; z < tz + d.h; z++) {
       for (let x = tx; x < tx + d.w; x++) {
-        if (!passable(x, z)) { return false; }
+        if (!passable(x, z) || bocc[z * N + x] >= 0) { return false; }
         const i = z * N + x;
         if (crystal[i] > 0 || docks.includes(i) || unitTiles.has(i)) { return false; }
         if (o === 0 && !revealed[i]) { return false; }
@@ -1569,6 +1650,12 @@
       });
       marker(picked.x, picked.z, 0xFF5A40); ack(units, true); return;
     }
+    if (picked && picked.owner === 0 && picked.type === 'repair') {
+      const veh = units.filter(u => u.def.armor !== 'inf');
+      veh.forEach((u, i) => { if (i === 0) { moveOrder(u, picked.x, picked.z, true); } else { moveOrder(u, picked.x + (i % 3 - 1) * 1.1, picked.z + 1.6 + Math.floor((i - 1) / 3) * 0.9, true); } });
+      units.filter(u => u.def.armor === 'inf').forEach(u => moveOrder(u, picked.x, picked.z + 2.2));
+      marker(picked.x, picked.z, 0x9BEA6E); ack(units, false); return;
+    }
     ack(units, false);
     const harvs = units.filter(u => u.harv), others = units.filter(u => !u.harv);
     if (picked && picked.owner === 0 && picked.type === 'refinery') {
@@ -1614,6 +1701,7 @@
   const ghostTile = new THREE.PlaneGeometry(0.94, 0.94);
   let ghostTx = -99, ghostTz = -99, ghostOk = false;
   function startPlacing(type) {
+    if (mode) { setMode(null); }
     placing = type; ghost.clear();
     const d = BLD[type];
     for (let z = 0; z < d.h; z++) { for (let x = 0; x < d.w; x++) { const m = new THREE.Mesh(ghostTile, ghostMatOk); m.rotation.x = -Math.PI / 2; m.position.set(x + 0.5, 0.1, z + 0.5); ghost.add(m); } }
@@ -1673,7 +1761,7 @@
     }
     if (placing && e.pointerType === 'mouse') { const g = groundAt(p.x, p.y); if (g) { moveGhost(g); } }
     if (!drag || drag.id !== e.pointerId) {
-      if (e.pointerType === 'mouse' && !placing && state === 'play') {
+      if (e.pointerType === 'mouse' && !placing && !mode && state === 'play') {
         const h = pick(p.x, p.y, false), us = ownSelUnits();
         renderer.domElement.style.cursor = h && h.owner === 1 && us.length ? 'crosshair' : h ? 'pointer' : 'default';
       }
@@ -1719,6 +1807,13 @@
       if (ghostOk) { placeNow(); } else { say('Cannot build there', 'bad'); sfx('error'); }
       return;
     }
+    if (mode) {
+      if (button === 2) { setMode(null); return; }
+      const t = pick(p.x, p.y, touch);
+      if (t && t.kind === 'bld' && t.owner === 0) { if (mode === 'repair') { toggleRepair(t); } else { sellBuilding(t); } }
+      else { sfx('error'); }
+      return;
+    }
     const picked = pick(p.x, p.y, touch);
     if (button === 2) { if (sel.size) { command(gp, picked, ctrl); } return; }
     const us = ownSelUnits(), hasUnits = us.length > 0;
@@ -1726,12 +1821,14 @@
     if (picked && picked.owner === 0) {
       if (picked.type === 'mcv' && sel.has(picked) && sel.size === 1) { deploy(picked); return; }
       if (touch && hasUnits && picked.type === 'refinery' && us.some(u => u.harv)) { command(gp, picked); return; }
+      if (touch && hasUnits && picked.type === 'repair') { command(gp, picked); return; }
       const now = performance.now();
+      if (picked.kind === 'bld' && (picked.type === 'barracks' || picked.type === 'factory') && now - lastClick.t < 380 && lastClick.id === picked.id) { setPrimary(picked); lastClick.t = 0; return; }
       if (picked.kind === 'unit' && now - lastClick.t < 380 && lastClick.type === picked.type) {
         const same = ents.filter(e => !e.dead && e.owner === 0 && e.type === picked.type).filter(e => { const s = toScreen(e.x, 0.3, e.z); return s.x >= 0 && s.y >= 0 && s.x <= view.clientWidth && s.y <= view.clientHeight; });
         setSel(same); lastClick.t = 0; sfx('click'); return;
       }
-      lastClick = { t: now, type: picked.type };
+      lastClick = { t: now, type: picked.type, id: picked.id };
       if (shift && picked.kind === 'unit') { toggleSel(picked); } else { setSel([picked]); }
       sfx('click');
       if (picked.kind === 'unit' && performance.now() - lastAck > 2500) { lastAck = performance.now(); speak(['Reporting', 'Awaiting orders', 'Ready'][Math.floor(Math.random() * 3)], picked.def.armor === 'inf' ? 1 : 0.7, false, 1.1); }
@@ -1755,6 +1852,22 @@
   mini.addEventListener('pointerup', () => { miniDown = false; });
   mini.addEventListener('contextmenu', e => e.preventDefault());
 
+  // sidebar Repair / Sell modes, as in the original sidebar
+  let mode = null;
+  const svgCursor = (svg, x, y, fb) => `url("data:image/svg+xml,${encodeURIComponent(svg)}") ${x} ${y}, ${fb}`;
+  const CURSOR = {
+    repair: svgCursor('<svg xmlns="http://www.w3.org/2000/svg" width="28" height="28"><g fill="none" stroke-linecap="round"><g stroke="#000" stroke-width="7"><path d="M5 23 L17 11"/><path d="M15 5 a6.5 6.5 0 1 0 8 8"/></g><g stroke="#F2C244" stroke-width="4"><path d="M5 23 L17 11"/><path d="M15 5 a6.5 6.5 0 1 0 8 8"/></g></g></svg>', 4, 24, 'pointer'),
+    sell: svgCursor('<svg xmlns="http://www.w3.org/2000/svg" width="28" height="28"><text x="14" y="22" font-size="24" font-family="monospace" font-weight="bold" text-anchor="middle" fill="#6FD24B" stroke="#000" stroke-width="1.5">$</text></svg>', 14, 14, 'pointer'),
+  };
+  function setMode(m) {
+    mode = m && mode !== m ? m : null;
+    if (mode && placing) { stopPlacing(); }
+    $('mRepair').setAttribute('aria-pressed', String(mode === 'repair')); $('mSell').setAttribute('aria-pressed', String(mode === 'sell'));
+    renderer.domElement.style.cursor = mode ? CURSOR[mode] : 'default';
+    if (mode) { say(mode === 'repair' ? 'Click structures to repair. Right-click to stop' : 'Click a structure to sell it. Right-click to stop'); }
+  }
+  $('mRepair').addEventListener('click', () => { if (state === 'play') { setMode('repair'); } });
+  $('mSell').addEventListener('click', () => { if (state === 'play') { setMode('sell'); } });
   const groups = {};
   addEventListener('keydown', e => {
     if (state !== 'play') { return; }
@@ -1762,7 +1875,7 @@
     if (paused) { return; }
     keys[e.code] = true;
     if (e.code.startsWith('Arrow')) { e.preventDefault(); }
-    if (e.code === 'Escape') { if (placing) { stopPlacing(); } else { setSel([]); } }
+    if (e.code === 'Escape') { if (mode) { setMode(null); } else if (placing) { stopPlacing(); } else { setSel([]); } }
     if (e.code === 'KeyS') { stopSel(); }
     if (e.code === 'KeyG') { guardSel(); }
     if (e.code === 'KeyX') { scatterSel(); }
@@ -1917,7 +2030,7 @@
   const selPanel = $('selPanel');
   function renderSel() {
     const arr = [...sel].filter(e => !e.dead);
-    const sig = arr.map(e => e.id + ':' + e.owner + (e.repairing ? 'r' : '')).join(',') + '|' + (placing || '') + '|' + have(0, 'hq');
+    const sig = arr.map(e => e.id + ':' + e.owner + (e.repairing ? 'r' : '') + (e.primary ? 'p' : '')).join(',') + countOwn(0, 'barracks') + countOwn(0, 'factory') + '|' + (placing || '') + '|' + have(0, 'hq');
     if (sig !== selSig) {
       selSig = sig;
       let html = '';
@@ -1935,12 +2048,16 @@
         else {
           const bits = [];
           if (d.power) { bits.push(d.power > 0 ? `+${d.power} power` : `${d.power} power`); }
+          if (d.power > 0) { bits.push('output drops when damaged'); }
           if (d.store) { bits.push(`stores ${d.store.toLocaleString('en-US')}`); }
           if (b.type === 'radar') { bits.push(radarOn(0) ? 'radar online' : 'radar offline'); }
           if (d.needsPower && lowPower(0)) { bits.push('offline: low power'); }
-          if (b.type === 'barracks' || b.type === 'factory') { bits.push(touchUI ? 'tap the map to set a rally point' : 'right-click the map to set a rally point'); }
-          html = `<b>${d.name}</b><div class="hp"><i data-hp="1"></i></div><p>${bits.join(' · ')}</p>`
-               + `<div class="acts">${b.type !== 'wall' ? `<button data-a="repair" type="button" aria-pressed="${b.repairing}">Repair</button>` : ''}<button data-a="sell" type="button">Sell +$${Math.floor(d.cost / 2)}</button>${tch}</div>`;
+          const producer = b.type === 'barracks' || b.type === 'factory', many = producer && countOwn(0, b.type) > 1, isPrimary = producer && primaryOf(0, b.type) === b;
+          if (producer) { bits.push(touchUI ? 'tap the map to set a rally point' : 'right-click the map to set a rally point'); if (many && !isPrimary) { bits.push(touchUI ? 'make it primary so new units come out here' : 'double-click to make it primary'); } }
+          if (b.type === 'repair') { bits.push(touchUI ? 'tap it with damaged vehicles selected' : 'right-click it with damaged vehicles selected'); }
+          if (b.type === 'hq') { bits.push(prod[0].bld.type && !prod[0].bld.ready ? 'building ' + BLD[prod[0].bld.type].name : 'builds structures'); }
+          html = `<b>${d.name}${many && isPrimary ? ' <span class="tag prim">PRIMARY</span>' : ''}</b><div class="hp"><i data-hp="1"></i></div><p>${bits.join(' · ')}</p>`
+               + `<div class="acts">${b.type !== 'wall' ? `<button data-a="repair" type="button" aria-pressed="${b.repairing}">Repair</button>` : ''}${many && !isPrimary ? '<button data-a="primary" type="button">Primary</button>' : ''}<button data-a="sell" type="button">Sell +$${Math.floor(d.cost / 2)}</button>${tch}</div>`;
         }
       } else {
         const counts = {};
@@ -1974,15 +2091,9 @@
     if (act === 'deploy') { deploySel(); }
     if (act === 'clear') { setSel([]); }
     const b = [...sel][0];
-    if (act === 'repair' && b && !b.dead) { b.repairing = !b.repairing && b.hp < b.maxhp; if (b.repairing) { say('Repairing'); speak('Repairing'); } selSig = ''; }
-    if (act === 'sell' && b && !b.dead) {
-      players[0].cash += Math.floor(b.def.cost / 2);
-      removeQuiet(b); freeTiles(b);
-      spawnSurvivors(b, b.type === 'wall' ? 0 : clamp(Math.round(b.def.cost / 700), 1, 3));
-      recompute(0);
-      puff(b.x, 0.4, b.z, { color: 0x8E948A, size: 0.6, life: 1, grow: 2 });
-      selSig = ''; say(b.def.name + ' sold'); speak('Structure sold'); sfx('click');
-    }
+    if (act === 'repair') { toggleRepair(b); }
+    if (act === 'primary' && b && !b.dead) { setPrimary(b); }
+    if (act === 'sell') { sellBuilding(b); }
     refreshUI();
   });
 
@@ -2004,7 +2115,15 @@
         }
       } else {
         const r = 1 - Math.pow(1 - e.rise, 3); e.obj.scale.set(1, Math.max(0.02, r), 1);
-        if (e.dish) { if (e.type === 'radar') { if (!lowPower(e.owner)) { e.dish.rotation.y += dt * 1.2; } } else { e.dish.rotation.y = Math.sin(gameTime * 0.25 + e.id) * 1.4; } }
+        if (e.dish) {
+          if (e.type === 'radar') { if (!lowPower(e.owner)) { e.dish.rotation.y += dt * 1.2; } }
+          else { const B = prod[e.owner] && prod[e.owner].bld, busy = B && B.type && !B.ready && !B.hold; e.dish.rotation.y = Math.sin(gameTime * (busy ? 1.1 : 0.25) + e.id) * 1.4; }
+        }
+        if (e.door) { e.doorK += ((e.doorT > 0 ? 1 : 0) - e.doorK) * Math.min(1, dt * 5); e.door.scale.y = Math.max(0.08, 1 - 0.92 * e.doorK); }
+        if (e.gauges.length) { const pl = players[e.owner], f = e.owner === 0 ? (pl.cap ? pl.ore / pl.cap : 0) : 0.6; e.gauges.forEach(gg => { gg.scale.y = Math.max(0.03, f); }); }
+        if (e.rangeRing) { e.rangeRing.visible = sel.has(e); }
+        e.primaryTag.visible = sel.has(e) && e.primary && countOwn(e.owner, e.type) > 1;
+        e.wrench.visible = e.repairing && Math.floor(performance.now() / 300) % 2 === 0;
         if (e.turret) { e.turret.rotation.y = e.aim; }
         if (live && vis) {
           e.smokeT -= dt;
@@ -2038,7 +2157,7 @@
     separate();
     updateProjs(dt);
     aiTick(dt);
-    visT -= dt; if (visT <= 0) { visT = 0.2; updateVision(); drawMini(); recompute(0); }
+    visT -= dt; if (visT <= 0) { visT = 0.2; updateVision(); drawMini(); recompute(0); recompute(1); }
     growT -= dt;
     if (growT <= 0) {
       growT = 1.5;
