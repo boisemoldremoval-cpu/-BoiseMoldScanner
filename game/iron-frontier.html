@@ -87,6 +87,13 @@
   .mode { background: linear-gradient(#3A3D3A, #242624); border: 1px solid #060706; box-shadow: inset 1px 1px 0 var(--edge-hi), inset -1px -1px 0 var(--edge-lo); color: var(--fg); font: 700 13px var(--display); letter-spacing: .16em; text-transform: uppercase; padding: 5px 0; cursor: pointer; }
   .mode[aria-pressed="true"] { color: #0A0B0A; background: linear-gradient(#F0C35A, #C9971F); }
   .tag.prim { background: var(--gold); color: #0A0B0A; }
+  #ghostTip { position: absolute; pointer-events: none; font: 13px var(--mono); color: #FF8A6E; background: rgba(5, 6, 5, 0.85); border: 1px solid #5A2A20; padding: 3px 8px; white-space: nowrap; transform: translate(14px, 14px); text-transform: uppercase; letter-spacing: .05em; }
+  .qb { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 4px; }
+  .qb button { display: flex; justify-content: space-between; gap: 6px; background: linear-gradient(#3A3D3A, #242624); border: 1px solid #060706; box-shadow: inset 1px 1px 0 var(--edge-hi), inset -1px -1px 0 var(--edge-lo); color: var(--fg); font: 700 12px var(--display); letter-spacing: .05em; text-transform: uppercase; padding: 4px 6px; cursor: pointer; min-width: 0; }
+  .qb button span { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  .qb button em { font: 11px var(--mono); font-style: normal; color: var(--gold); flex: none; }
+  .qb button:disabled { opacity: .4; cursor: not-allowed; }
+  .qb button:not(:disabled):hover { color: var(--gold); }
   .tag { font: 11px var(--mono); letter-spacing: .1em; padding: 1px 6px; background: var(--red); color: #fff; vertical-align: middle; }
 
   .screen { position: fixed; inset: 0; display: grid; place-items: center; padding-inline: 16px; padding-block: 20px; background: rgba(4, 5, 4, 0.6); overflow-y: auto; }
@@ -128,6 +135,7 @@
   <div id="view">
     <div id="selBox" hidden></div>
     <div id="log" aria-live="polite"></div>
+    <div id="ghostTip" hidden></div>
     <button id="pauseBtn" type="button">Pause</button>
   </div>
   <aside id="side">
@@ -834,11 +842,11 @@
     for (let z = tz; z < tz + 3; z++) {
       for (let x = tx; x < tx + 3; x++) {
         if (!passable(x, z) || bocc[z * N + x] >= 0 || crystal[z * N + x] > 0) { return fail(); }
-        if (ents.some(e => !e.dead && e !== u && e.kind === 'unit' && tileOf(e) === z * N + x)) { return fail(); }
+        if (ents.some(e => !e.dead && e !== u && e.kind === 'unit' && e.owner !== u.owner && tileOf(e) === z * N + x)) { return fail(); }
       }
     }
     removeQuiet(u);
-    addBuilding(u.owner, 'hq', tx, tz);
+    clearFootprint(addBuilding(u.owner, 'hq', tx, tz));
     if (u.owner === 0) { say('Construction Yard deployed'); speak('Deploying'); sfx('place'); updateVision(); }
     return true;
   }
@@ -1483,19 +1491,35 @@
     }
   }
   function dockTiles() { return ents.filter(e => !e.dead && e.type === 'refinery').map(r => (r.tz + r.h) * N + r.tx + 1); }
-  function canPlace(o, type, tx, tz) {
+  // returns null when the spot is valid, otherwise the reason it is not
+  function placeProblem(o, type, tx, tz) {
     const d = BLD[type], docks = dockTiles();
-    const unitTiles = new Set(ents.filter(e => !e.dead && e.kind === 'unit').map(tileOf));
+    const enemyTiles = new Set(ents.filter(e => !e.dead && e.kind === 'unit' && e.owner !== o).map(tileOf));
     for (let z = tz; z < tz + d.h; z++) {
       for (let x = tx; x < tx + d.w; x++) {
-        if (!passable(x, z) || bocc[z * N + x] >= 0) { return false; }
+        if (!inB(x, z)) { return 'Off the map'; }
         const i = z * N + x;
-        if (crystal[i] > 0 || docks.includes(i) || unitTiles.has(i)) { return false; }
-        if (o === 0 && !revealed[i]) { return false; }
+        if (o === 0 && !revealed[i]) { return 'Area not explored'; }
+        if (terrain[i] !== 0) { return terrain[i] === 1 ? 'Blocked by rocks' : 'Blocked by trees'; }
+        if (bocc[i] >= 0) { return 'Blocked by a structure'; }
+        if (crystal[i] > 0) { return "Can't build on crystal"; }
+        if (docks.includes(i)) { return 'Keep the refinery dock clear'; }
+        if (enemyTiles.has(i)) { return 'Blocked by enemy units'; }
       }
     }
-    if (type === 'refinery') { const dx = tx + 1, dz = tz + 2; if (!passable(dx, dz) || unitTiles.has(dz * N + dx)) { return false; } }
-    return ents.some(b => !b.dead && b.owner === o && b.kind === 'bld' && tx <= b.tx + b.w + 2 && tx + d.w >= b.tx - 2 && tz <= b.tz + b.h + 2 && tz + d.h >= b.tz - 2);
+    if (type === 'refinery') { const dx = tx + 1, dz = tz + 2; if (!passable(dx, dz) || enemyTiles.has(dz * N + dx)) { return 'The dock in front needs open ground'; } }
+    const near = ents.some(b => !b.dead && !b.selling && b.owner === o && b.kind === 'bld' && tx <= b.tx + b.w + 2 && tx + d.w >= b.tx - 2 && tz <= b.tz + b.h + 2 && tz + d.h >= b.tz - 2);
+    return near ? null : 'Too far from your base';
+  }
+  const canPlace = (o, type, tx, tz) => placeProblem(o, type, tx, tz) === null;
+  // own units standing on a new building's footprint (or its dock) walk off it
+  function clearFootprint(b) {
+    const inFoot = u => u.x >= b.tx - 0.05 && u.x <= b.tx + b.w + 0.05 && u.z >= b.tz - 0.05 && u.z <= b.tz + b.h + (b.type === 'refinery' ? 1.05 : 0.05);
+    ents.forEach(u => {
+      if (u.dead || u.kind !== 'unit' || u.owner !== b.owner || !inFoot(u)) { return; }
+      const p = nearestPassable(Math.floor(u.x), b.tz + b.h + (b.type === 'refinery' ? 1 : 0), 6, Math.floor(u.x), Math.floor(u.z));
+      if (p) { moveOrder(u, p.x + 0.3 + rand() * 0.4, p.z + 0.3 + rand() * 0.4, true); }
+    });
   }
 
   // ================= enemy AI =================
@@ -1537,7 +1561,7 @@
     blds.forEach(b => { if (!b.repairing && b.hp < b.maxhp * 0.65 && credits(1) > 300) { b.repairing = true; } });
     if (P.bld.ready) {
       const spot = aiSpot(P.bld.type);
-      if (spot) { const b = addBuilding(1, P.bld.type, spot.tx, spot.tz); if (b.type === 'refinery') { const dk = dock(b); addUnit(1, 'harv', dk.x, dk.z); } }
+      if (spot) { const b = addBuilding(1, P.bld.type, spot.tx, spot.tz); clearFootprint(b); if (b.type === 'refinery') { const dk = dock(b); addUnit(1, 'harv', dk.x, dk.z); } }
       else { pw.cash += P.bld.spent; ai.skip[P.bld.type] = gameTime + 60; }
       P.bld = { type: null, t: 0, spent: 0, ready: false, hold: false };
     } else if (!P.bld.type && have(1, 'hq')) {
@@ -1686,6 +1710,11 @@
     list.forEach(e => sel.add(e));
     sel.forEach(e => { e.ring.visible = true; });
     selSig = '';
+    const only = list.length === 1 ? list[0] : null;
+    if (only && only.kind === 'bld' && only.owner === 0) {
+      if (only.type === 'barracks' || only.type === 'factory') { setTab(true); }
+      else if (only.type === 'hq') { setTab(false); }
+    }
   }
   function toggleSel(e) { if (sel.has(e)) { sel.delete(e); e.ring.visible = false; } else { sel.add(e); e.ring.visible = true; } selSig = ''; }
   const ownSelUnits = () => [...sel].filter(e => !e.dead && e.kind === 'unit' && e.owner === 0);
@@ -1767,7 +1796,9 @@
   const ghostMatBad = new THREE.MeshBasicMaterial({ color: 0xD24A36, transparent: true, opacity: 0.45, depthWrite: false });
   const ghostMatDock = new THREE.MeshBasicMaterial({ color: 0xF0B429, transparent: true, opacity: 0.35, depthWrite: false });
   const ghostTile = new THREE.PlaneGeometry(0.94, 0.94);
-  let ghostTx = -99, ghostTz = -99, ghostOk = false;
+  let ghostTx = -99, ghostTz = -99, ghostOk = false, ghostWhy = null;
+  const tipEl = $('ghostTip');
+  function showTip(px, py) { if (!placing || ghostOk || !ghostWhy) { tipEl.hidden = true; return; } tipEl.textContent = ghostWhy; tipEl.style.left = px + 'px'; tipEl.style.top = py + 'px'; tipEl.hidden = false; }
   function startPlacing(type) {
     if (mode) { setMode(null); }
     placing = type; ghost.clear();
@@ -1775,12 +1806,12 @@
     for (let z = 0; z < d.h; z++) { for (let x = 0; x < d.w; x++) { const m = new THREE.Mesh(ghostTile, ghostMatOk); m.rotation.x = -Math.PI / 2; m.position.set(x + 0.5, 0.1, z + 0.5); ghost.add(m); } }
     if (type === 'refinery') { const m = new THREE.Mesh(ghostTile, ghostMatDock); m.rotation.x = -Math.PI / 2; m.position.set(1.5, 0.1, 2.5); m.userData.dock = true; ghost.add(m); }
     ghost.visible = false; ghostTx = -99; selSig = '';
-    say(type === 'wall' ? 'Click to lay sandbags. Right-click to stop' : touchUI ? 'Tap the map to position, tap again to build' : 'Click near your base to place it');
+    say(type === 'wall' ? 'Click to lay sandbags. Right-click to stop' : touchUI ? 'Tap the map to position, tap again to build' : 'Place it within two squares of your buildings');
   }
-  function stopPlacing() { placing = null; ghost.visible = false; selSig = ''; }
+  function stopPlacing() { placing = null; ghost.visible = false; selSig = ''; tipEl.hidden = true; }
   function moveGhost(gp) {
     const d = BLD[placing], tx = Math.round(gp.x - d.w / 2), tz = Math.round(gp.z - d.h / 2);
-    ghostTx = tx; ghostTz = tz; ghostOk = canPlace(0, placing, tx, tz);
+    ghostTx = tx; ghostTz = tz; ghostWhy = placeProblem(0, placing, tx, tz); ghostOk = ghostWhy === null;
     ghost.position.set(tx, 0, tz); ghost.visible = true;
     ghost.children.forEach(m => { if (!m.userData.dock) { m.material = ghostOk ? ghostMatOk : ghostMatBad; } });
     return { tx, tz };
@@ -1790,11 +1821,11 @@
     if (BLD[type].instant) {
       if (credits(0) < BLD[type].cost) { noFunds(); return; }
       spendUpTo(0, BLD[type].cost);
-      const b = addBuilding(0, type, ghostTx, ghostTz); b.rise = 0.6; sfx('place');
+      const b = addBuilding(0, type, ghostTx, ghostTz); b.rise = 0.6; sfx('place'); clearFootprint(b);
       moveGhost({ x: ghostTx + 0.5, z: ghostTz + 0.5 });
       return;
     }
-    const b = addBuilding(0, type, ghostTx, ghostTz);
+    const b = addBuilding(0, type, ghostTx, ghostTz); clearFootprint(b);
     prod[0].bld = { type: null, t: 0, spent: 0, ready: false, hold: false };
     stopPlacing(); sfx('place');
     if (type === 'refinery') { const dk = dock(b); const h = addUnit(0, 'harv', dk.x, dk.z); h.facing = 0; stats.built++; }
@@ -1827,7 +1858,7 @@
       const [a, b] = [...pointers.values()];
       cam.dist = clamp(pinch.dist * pinch.d / Math.max(20, Math.hypot(a.x - b.x, a.y - b.y)), 9, 40); return;
     }
-    if (placing && e.pointerType === 'mouse') { const g = groundAt(p.x, p.y); if (g) { moveGhost(g); } }
+    if (placing && e.pointerType === 'mouse') { const g = groundAt(p.x, p.y); if (g) { moveGhost(g); showTip(p.x, p.y); } }
     if (!drag || drag.id !== e.pointerId) {
       if (e.pointerType === 'mouse' && !placing && !mode && state === 'play') {
         const h = pick(p.x, p.y, false), us = ownSelUnits();
@@ -1871,8 +1902,9 @@
       if (button === 2) { stopPlacing(); return; }
       const prevX = ghostTx, prevZ = ghostTz, wasVisible = ghost.visible;
       const { tx, tz } = moveGhost(gp);
+      showTip(p.x, p.y);
       if (touch && !(wasVisible && prevX === tx && prevZ === tz) && !BLD[placing].instant) { return; }
-      if (ghostOk) { placeNow(); } else { say('Cannot build there', 'bad'); sfx('error'); }
+      if (ghostOk) { placeNow(); } else { say(ghostWhy || 'Cannot build there', 'bad'); sfx('error'); speak('Cannot deploy here'); }
       return;
     }
     if (mode) {
@@ -2098,7 +2130,7 @@
   const selPanel = $('selPanel');
   function renderSel() {
     const arr = [...sel].filter(e => !e.dead);
-    const sig = arr.map(e => e.id + ':' + e.owner + (e.repairing ? 'r' : '') + (e.primary ? 'p' : '')).join(',') + countOwn(0, 'barracks') + countOwn(0, 'factory') + '|' + (placing || '') + '|' + have(0, 'hq');
+    const sig = arr.map(e => e.id + ':' + e.owner + (e.repairing ? 'r' : '') + (e.primary ? 'p' : '')).join(',') + countOwn(0, 'barracks') + countOwn(0, 'factory') + have(0, 'radar') + '|' + (placing || '') + '|' + have(0, 'hq');
     if (sig !== selSig) {
       selSig = sig;
       let html = '';
@@ -2124,7 +2156,8 @@
           if (producer) { bits.push(touchUI ? 'tap the map to set a rally point' : 'right-click the map to set a rally point'); if (many && !isPrimary) { bits.push(touchUI ? 'make it primary so new units come out here' : 'double-click to make it primary'); } }
           if (b.type === 'repair') { bits.push(touchUI ? 'tap it with damaged vehicles selected' : 'right-click it with damaged vehicles selected'); }
           if (b.type === 'hq') { bits.push(prod[0].bld.type && !prod[0].bld.ready ? 'building ' + BLD[prod[0].bld.type].name : 'builds structures'); }
-          html = `<b>${d.name}${many && isPrimary ? ' <span class="tag prim">PRIMARY</span>' : ''}</b><div class="hp"><i data-hp="1"></i></div><p>${bits.join(' · ')}</p>`
+          const qb = producer ? `<div class="qb">${UNIT_LIST.filter(t => UNIT[t].cat === (b.type === 'barracks' ? 'inf' : 'veh')).map(t => `<button type="button" data-u="${t}" title="${UNIT[t].desc}"${reqMet(0, UNIT[t].req) ? '' : ' disabled'}><span>${UNIT[t].name}</span><em data-q="${t}">$${UNIT[t].cost}</em></button>`).join('')}</div>` : '';
+          html = `<b>${d.name}${many && isPrimary ? ' <span class="tag prim">PRIMARY</span>' : ''}</b><div class="hp"><i data-hp="1"></i></div>${qb}<p>${bits.join(' · ')}</p>`
                + `<div class="acts">${b.type !== 'wall' ? `<button data-a="repair" type="button" aria-pressed="${b.repairing}">Repair</button>` : ''}${many && !isPrimary ? '<button data-a="primary" type="button">Primary</button>' : ''}<button data-a="sell" type="button">Sell +$${Math.floor(d.cost / 2)}</button>${tch}</div>`;
         }
       } else {
@@ -2146,11 +2179,17 @@
       const hp = arr.reduce((s, e) => s + e.hp, 0), mx = arr.reduce((s, e) => s + e.maxhp, 0), k = mx ? hp / mx : 0;
       bar.style.width = k * 100 + '%'; bar.style.background = k > 0.6 ? 'var(--good)' : k > 0.3 ? 'var(--gold)' : 'var(--red)';
     }
+    selPanel.querySelectorAll('[data-q]').forEach(el => {
+      const t = el.dataset.q, Q = prod[0][UNIT[t].cat], n = Q.q.filter(x => x === t).length;
+      el.textContent = Q.q[0] === t ? `${Math.floor(Q.t * 100)}%${n > 1 ? ' +' + (n - 1) : ''}` : n ? `×${n}` : '$' + UNIT[t].cost;
+    });
     const cg = selPanel.querySelector('[data-cargo]');
     if (cg && arr[0] && arr[0].harv) { const h = arr[0].harv; cg.textContent = `Cargo ${Math.floor(h.cargo)} / ${CAP} · ${({ seek: 'looking for crystal', go: 'heading to crystal', harvest: 'harvesting', return: 'returning', toRef: 'returning', unload: players[0].ore >= players[0].cap ? 'waiting: silos full' : 'unloading', manual: 'moving' })[h.state]}`; }
   }
+  selPanel.addEventListener('contextmenu', e => { const a = e.target.closest('button[data-u]'); if (!a) { return; } e.preventDefault(); unitCancel(a.dataset.u); refreshUI(); });
   selPanel.addEventListener('click', e => {
     const a = e.target.closest('button'); if (!a) { return; }
+    if (a.dataset.u) { initAudio(); unitCard(a.dataset.u); refreshUI(); return; }
     const act = a.dataset.a;
     if (act === 'cancelPlace') { stopPlacing(); }
     if (act === 'stop') { stopSel(); }
