@@ -150,4 +150,19 @@ describe('runnerStore', () => {
     expect(runnerStore.status.get()).toBe('failed');
     expect(written.join('')).toContain('Could not find how to start this project');
   });
+
+  it('prefers the .appforge run config over auto-detection', async () => {
+    const fake = fakeProcess();
+    h.spawn.mockResolvedValue(fake.process);
+    h.files.setKey('/home/project/.appforge', {
+      type: 'file',
+      isBinary: false,
+      content: 'install = "npm ci"\nrun = "node api.js"\n',
+    });
+
+    await runnerStore.run();
+
+    expect(h.spawn.mock.calls[0][1]).toEqual(['-c', 'npm ci && node api.js']);
+    expect(runnerStore.command.get()).toBe('npm ci && node api.js');
+  });
 });

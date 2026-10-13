@@ -19,6 +19,8 @@ AppForge is built on [bolt.diy](https://github.com/stackblitz-labs/bolt.diy) (MI
 | Code editor (CodeMirror), file tree, diff view | ✅ upstream | `app/components/editor`, `app/components/workbench` |
 | Terminal | ✅ upstream | `app/components/workbench/terminal` |
 | **Run / Stop** button: install + start the app, output in a **Console** view | ✅ new | `app/lib/runner`, `RunButton.tsx`, `ConsolePanel.tsx` |
+| **My Apps** dashboard (`/apps`): create from a prompt or template, search, rename, duplicate, delete | ✅ new | `app/routes/apps.tsx`, `app/components/apps`, `app/lib/projects` |
+| **`.appforge`** run config (`run = "..."`, `install = "..."`), like Replit's `.replit` | ✅ new | `app/lib/runner/run-config.ts` |
 | **Secrets**: per-project env vars injected at run time, never written to files | ✅ new | `app/lib/runner/secrets*.ts`, `SecretsPanel.tsx` |
 | Live preview | ✅ upstream | `app/components/workbench/Preview.tsx` |
 | Debugging: preview/terminal errors and crashed runs → "Ask AI to fix" | ✅ upstream + new | `app/lib/webcontainer/index.ts`, `ChatAlert.tsx` |

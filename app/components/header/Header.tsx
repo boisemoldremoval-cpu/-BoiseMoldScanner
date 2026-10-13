@@ -22,6 +22,13 @@ export function Header() {
           <img src={BRAND.markUrl} alt="" className="w-7 h-7 mr-2 inline-block" />
           <span className="text-xl font-bold tracking-tight text-bolt-elements-textPrimary">{BRAND.name}</span>
         </a>
+        <a
+          href="/apps"
+          className="ml-3 flex items-center gap-1 px-2.5 py-1 text-sm rounded-md text-bolt-elements-textSecondary hover:text-bolt-elements-textPrimary hover:bg-bolt-elements-background-depth-2"
+        >
+          <span className="i-ph:squares-four" />
+          My Apps
+        </a>
       </div>
       {chat.started && ( // Display ChatDescription and HeaderActionButtons only when the chat has started.
         <>

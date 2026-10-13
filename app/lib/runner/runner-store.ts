@@ -1,6 +1,7 @@
 import type { WebContainerProcess } from '@webcontainer/api';
 import { atom } from 'nanostores';
 import { appendBounded, buildRunCommand, stripAnsi } from './run-command';
+import { commandFromRunConfig, parseRunConfig, RUN_CONFIG_FILE } from './run-config';
 import { secretsToEnv } from './secrets';
 import { secretsStore } from './secrets-store';
 import { workbenchStore } from '~/lib/stores/workbench';
@@ -68,13 +69,18 @@ class RunnerStore {
       })
       .map(([path, dirent]) => ({ path, content: dirent?.type === 'file' ? dirent.content : '' }));
 
-    const command = buildRunCommand(await detectProjectCommands(files));
+    const runConfig = files.find((file) => file.path === `${WORK_DIR}/${RUN_CONFIG_FILE}`);
+
+    const command =
+      (runConfig && commandFromRunConfig(parseRunConfig(runConfig.content))) ||
+      buildRunCommand(await detectProjectCommands(files));
     this.command.set(command);
 
     if (!command) {
       this.#write(
         coloredText.red('Could not find how to start this project.\r\n') +
-          'Add a "dev" or "start" script to package.json, or an index.html, then press Run again.\r\n',
+          `Add a "dev" or "start" script to package.json, an index.html, or a ${RUN_CONFIG_FILE} file with\r\n` +
+          `  run = "your start command"\r\nthen press Run again.\r\n`,
       );
       this.status.set('failed');
 
