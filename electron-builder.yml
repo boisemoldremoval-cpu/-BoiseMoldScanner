@@ -1,5 +1,5 @@
-appId: com.appforge.desktop
-productName: AppForge
+appId: com.appfreedom.desktop
+productName: AppFreedom
 directories:
   buildResources: build
   output: dist

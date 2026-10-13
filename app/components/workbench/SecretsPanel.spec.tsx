@@ -37,7 +37,7 @@ describe('SecretsPanel', () => {
     fireEvent.click(within(row).getByTitle('Show value'));
     expect(within(row).getByText('super-secret')).toBeTruthy();
 
-    expect(JSON.parse(localStorage.getItem('appforge_secrets:__unsaved__')!)).toEqual([
+    expect(JSON.parse(localStorage.getItem('appfreedom_secrets:__unsaved__')!)).toEqual([
       { key: 'API_TOKEN', value: 'super-secret' },
     ]);
   });
@@ -72,8 +72,8 @@ describe('SecretsPanel', () => {
     addSecret('A', '1');
 
     chatId.store.set('project-1');
-    expect(localStorage.getItem('appforge_secrets:__unsaved__')).toBeNull();
-    expect(JSON.parse(localStorage.getItem('appforge_secrets:project-1')!)).toEqual([{ key: 'A', value: '1' }]);
+    expect(localStorage.getItem('appfreedom_secrets:__unsaved__')).toBeNull();
+    expect(JSON.parse(localStorage.getItem('appfreedom_secrets:project-1')!)).toEqual([{ key: 'A', value: '1' }]);
 
     chatId.store.set('project-2');
     expect(secretsStore.get()).toEqual([]);

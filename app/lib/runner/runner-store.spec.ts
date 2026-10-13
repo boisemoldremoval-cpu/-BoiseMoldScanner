@@ -151,10 +151,10 @@ describe('runnerStore', () => {
     expect(written.join('')).toContain('Could not find how to start this project');
   });
 
-  it('prefers the .appforge run config over auto-detection', async () => {
+  it('prefers the .appfreedom run config over auto-detection', async () => {
     const fake = fakeProcess();
     h.spawn.mockResolvedValue(fake.process);
-    h.files.setKey('/home/project/.appforge', {
+    h.files.setKey('/home/project/.appfreedom', {
       type: 'file',
       isBinary: false,
       content: 'install = "npm ci"\nrun = "node api.js"\n',

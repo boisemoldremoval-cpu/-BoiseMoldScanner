@@ -1,5 +1,5 @@
 {
-  "name": "appforge",
+  "name": "appfreedom",
   "description": "AI application builder: describe an app in plain English and get a working application",
   "private": true,
   "license": "MIT",
@@ -7,7 +7,7 @@
   "type": "module",
   "version": "1.0.0",
   "author": {
-    "name": "AppForge"
+    "name": "AppFreedom"
   },
   "scripts": {
     "deploy": "pnpm run build && wrangler deploy",

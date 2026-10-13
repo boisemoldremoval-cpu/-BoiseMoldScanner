@@ -15,7 +15,7 @@ const env = (import.meta as { env?: Record<string, string | undefined> }).env ??
 
 export const BRAND = {
   /** Product name shown in the header, page titles, prompts to the user, etc. */
-  name: env.VITE_BRAND_NAME || 'AppForge',
+  name: env.VITE_BRAND_NAME || 'AppFreedom',
 
   /** Short tagline used in page meta descriptions and the landing hero. */
   tagline: env.VITE_BRAND_TAGLINE || 'Describe an app in plain English. Get a working application.',
@@ -24,7 +24,7 @@ export const BRAND = {
   heroTitle: env.VITE_BRAND_HERO_TITLE || 'What do you want to build?',
 
   /** Organisation shown as author/publisher. */
-  company: env.VITE_BRAND_COMPANY || 'AppForge',
+  company: env.VITE_BRAND_COMPANY || 'AppFreedom',
 
   /** Public website, used for "about" links. */
   websiteUrl: env.VITE_BRAND_WEBSITE_URL || 'https://github.com/boisemoldremoval-cpu/-BoiseMoldScanner',

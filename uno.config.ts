@@ -35,7 +35,7 @@ const BASE_COLORS = {
     950: '#0A0A0A',
   },
   accent: {
-    // Brand accent ("forge ember"). Change these to re-theme the whole UI.
+    // Brand accent. Change these to re-theme the whole UI.
     50: '#FFF7ED',
     100: '#FFEDD5',
     200: '#FED7AA',

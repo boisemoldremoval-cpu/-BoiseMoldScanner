@@ -1,4 +1,4 @@
-# AppForge roadmap
+# AppFreedom roadmap
 
 Stages build on the bolt.diy foundation without breaking its existing
 behaviour. Each stage lands as its own commit(s) with tests, typecheck, lint
@@ -11,7 +11,7 @@ and build passing.
 | 0 | Import bolt.diy (`stackblitz-labs/bolt.diy@10d94fb`), install, baseline tests (451 tests; typecheck, lint, build green). |
 | 1 | Independent branding through `app/config/brand.ts` + `VITE_BRAND_*`, new logo/mark, accent palette, README/NOTICE, upstream release workflows removed. |
 | 2 | Claude as default provider (`claude-opus-5-5`), current Claude model list, fix for sampling params rejected by current Claude models. Local models (Ollama, LM Studio, OpenAI-compatible) unchanged and documented. |
-| 2.5 | Replit-style workspace: Run/Stop button, Console view (with "Ask AI to fix" on crash), per-project Secrets injected as env vars, My Apps dashboard, `.appforge` run config. |
+| 2.5 | Replit-style workspace: Run/Stop button, Console view (with "Ask AI to fix" on crash), per-project Secrets injected as env vars, My Apps dashboard, `.appfreedom` run config. |
 | 3-4 | GitHub sign-in (signed-cookie sessions, CSRF checks) and cloud saving of apps to the account via KV (Cloudflare KV in production, on-disk locally), auto-sync, My Apps merges local and cloud apps. |
 
 ## Already provided by the foundation
@@ -86,8 +86,8 @@ commercial license (see NOTICE):
 
 ## Decisions needed
 
-1. **Brand name and domain**: the placeholder is "AppForge"; change it in
-   `app/config/brand.ts` or with `VITE_BRAND_NAME`.
+1. **Domain**: the brand is AppFreedom (`app/config/brand.ts`); pick the
+   production domain for the GitHub OAuth callback and links.
 2. **Hosting**: still open. Works on Cloudflare (KV) and Docker (on-disk KV via a
    mounted volume) today; a Postgres adapter can be added for other hosts.
 3. **WebContainer license**: buy a StackBlitz commercial license, or

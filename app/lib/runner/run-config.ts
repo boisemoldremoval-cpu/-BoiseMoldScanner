@@ -1,14 +1,14 @@
 /**
- * `.appforge` run configuration, the equivalent of Replit's `.replit`:
+ * `.appfreedom` run configuration, the equivalent of Replit's `.replit`:
  *
- *   # .appforge
+ *   # .appfreedom
  *   install = "npm install"
  *   run = "npm run dev"
  *
  * Only `key = "value"` lines are read (single or double quotes); `#` starts a
  * comment. When `run` is set the Run button uses it instead of auto-detection.
  */
-export const RUN_CONFIG_FILE = '.appforge';
+export const RUN_CONFIG_FILE = '.appfreedom';
 
 export interface RunConfig {
   run?: string;

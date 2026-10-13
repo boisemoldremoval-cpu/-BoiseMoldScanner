@@ -1,4 +1,4 @@
-# AppForge
+# AppFreedom
 
 Describe an app in plain English and an AI agent builds the working application:
 code editor, terminal, live preview, chat, debugging and one-click deploy, all in the
@@ -8,7 +8,7 @@ browser.
 > place: [`app/config/brand.ts`](app/config/brand.ts) (or the `VITE_BRAND_*`
 > variables in `.env.local`) and the `accent` palette in [`uno.config.ts`](uno.config.ts).
 
-AppForge is built on [bolt.diy](https://github.com/stackblitz-labs/bolt.diy) (MIT). See
+AppFreedom is built on [bolt.diy](https://github.com/stackblitz-labs/bolt.diy) (MIT). See
 [NOTICE](NOTICE) for attribution and the WebContainer licensing note.
 
 ## Features
@@ -20,7 +20,7 @@ AppForge is built on [bolt.diy](https://github.com/stackblitz-labs/bolt.diy) (MI
 | Terminal | ✅ upstream | `app/components/workbench/terminal` |
 | **Run / Stop** button: install + start the app, output in a **Console** view | ✅ new | `app/lib/runner`, `RunButton.tsx`, `ConsolePanel.tsx` |
 | **My Apps** dashboard (`/apps`): create from a prompt or template, search, rename, duplicate, delete | ✅ new | `app/routes/apps.tsx`, `app/components/apps`, `app/lib/projects` |
-| **`.appforge`** run config (`run = "..."`, `install = "..."`), like Replit's `.replit` | ✅ new | `app/lib/runner/run-config.ts` |
+| **`.appfreedom`** run config (`run = "..."`, `install = "..."`), like Replit's `.replit` | ✅ new | `app/lib/runner/run-config.ts` |
 | **Secrets**: per-project env vars injected at run time, never written to files | ✅ new | `app/lib/runner/secrets*.ts`, `SecretsPanel.tsx` |
 | Live preview | ✅ upstream | `app/components/workbench/Preview.tsx` |
 | Debugging: preview/terminal errors and crashed runs → "Ask AI to fix" | ✅ upstream + new | `app/lib/webcontainer/index.ts`, `ChatAlert.tsx` |

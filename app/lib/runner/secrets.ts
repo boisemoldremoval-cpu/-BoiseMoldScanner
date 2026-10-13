@@ -16,7 +16,7 @@ export const SECRET_KEY_PATTERN = /^[A-Za-z_][A-Za-z0-9_]*$/;
 /** Variables the runner itself sets; user secrets may not override them. */
 export const RESERVED_SECRET_KEYS = new Set(['PATH', 'HOME', 'PWD', 'SHELL', 'CI', 'NODE_OPTIONS']);
 
-export const SECRETS_STORAGE_PREFIX = 'appforge_secrets:';
+export const SECRETS_STORAGE_PREFIX = 'appfreedom_secrets:';
 
 /** Returns an error message, or null when `key` can be added. */
 export function validateSecretKey(key: string, existing: Secret[], editingKey?: string): string | null {
