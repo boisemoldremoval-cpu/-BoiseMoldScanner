@@ -1,0 +1,533 @@
+<title>Mold Hunter</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Lilita+One&family=Nunito:wght@600;800;900&display=swap">
+<style>
+  /* Layout: full-bleed WebGL house, HUD chips pinned to the corners, modal cards for start/end. Single dark game look. */
+  :root {
+    color-scheme: dark;
+    --bg: #0E2A36;
+    --panel: rgba(9, 30, 40, 0.78);
+    --panel-line: rgba(127, 224, 230, 0.22);
+    --fg: #F2F6F4;
+    --muted: #A9C2C8;
+    --teal: #2E8B95;
+    --scan: #7FE0E6;
+    --orange: #E8692E;
+    --orange-dark: #A9461A;
+    --good: #3CCB7F;
+    --warn: #F2C230;
+    --bad: #E2483D;
+    --display: "Lilita One", "Arial Rounded MT Bold", "Trebuchet MS", sans-serif;
+    --ui: Nunito, "Segoe UI", system-ui, sans-serif;
+  }
+  [hidden] { display: none !important; }
+  html, body { height: 100%; }
+  body { background: var(--bg); color: var(--fg); font-family: var(--ui); overflow: hidden; touch-action: none; user-select: none; -webkit-user-select: none; }
+  #game { position: fixed; inset: 0; }
+  #game canvas { display: block; width: 100%; height: 100%; }
+
+  .hud { position: fixed; top: calc(env(safe-area-inset-top, 0px) + 12px); left: 16px; right: 16px; display: flex; justify-content: space-between; align-items: flex-start; gap: 12px; pointer-events: none; }
+  .chip { background: var(--panel); border: 1px solid var(--panel-line); border-radius: 14px; padding: 10px 14px; backdrop-filter: blur(6px); }
+  .label { font-size: 11px; font-weight: 900; letter-spacing: 0.12em; text-transform: uppercase; color: var(--muted); }
+  .air { width: min(46vw, 260px); display: grid; gap: 6px; }
+  .air-row { display: flex; justify-content: space-between; align-items: baseline; }
+  .air-val { font-family: var(--display); font-size: 22px; font-variant-numeric: tabular-nums; }
+  .meter { height: 10px; border-radius: 6px; background: rgba(255,255,255,0.1); overflow: hidden; }
+  .meter > i { display: block; height: 100%; width: 100%; border-radius: 6px; background: var(--good); transition: background-color .3s; }
+  .stats { display: flex; gap: 16px; text-align: right; }
+  .stat b { display: block; font-family: var(--display); font-size: 26px; line-height: 1.05; font-weight: 400; font-variant-numeric: tabular-nums; }
+  .air.low .air-val { color: var(--bad); }
+
+  .toast { position: fixed; left: 50%; top: calc(env(safe-area-inset-top, 0px) + 92px); transform: translateX(-50%); font-family: var(--display); font-size: 22px; color: var(--warn); text-shadow: 0 2px 0 rgba(0,0,0,.4); pointer-events: none; opacity: 0; transition: opacity .25s; white-space: nowrap; }
+  .toast.show { opacity: 1; }
+
+  .hint { position: fixed; bottom: calc(env(safe-area-inset-bottom, 0px) + 14px); left: 50%; transform: translateX(-50%); font-size: 13px; font-weight: 800; color: var(--muted); background: var(--panel); border: 1px solid var(--panel-line); border-radius: 999px; padding: 6px 14px; pointer-events: none; white-space: nowrap; }
+  .hint kbd { font-family: var(--ui); background: rgba(255,255,255,.12); border-radius: 5px; padding: 1px 6px; color: var(--fg); }
+
+  /* touch controls */
+  .touch { display: none; }
+  @media (pointer: coarse) { .touch { display: block; } .hint { display: none; } }
+  #stickZone { position: fixed; left: 0; bottom: 0; width: 55%; height: 60%; }
+  #stick { position: fixed; width: 120px; height: 120px; margin: -60px 0 0 -60px; border-radius: 50%; border: 2px solid var(--panel-line); background: rgba(9,30,40,.45); opacity: 0; pointer-events: none; }
+  #stick i { position: absolute; left: 50%; top: 50%; width: 52px; height: 52px; margin: -26px 0 0 -26px; border-radius: 50%; background: var(--scan); opacity: .8; }
+  #sprayBtn { position: fixed; right: 20px; bottom: calc(env(safe-area-inset-bottom, 0px) + 28px); width: 96px; height: 96px; border-radius: 50%; border: 0; background: var(--orange); color: #fff; font-family: var(--display); font-size: 20px; box-shadow: 0 6px 0 var(--orange-dark); }
+  #sprayBtn.on { transform: translateY(4px); box-shadow: 0 2px 0 var(--orange-dark); }
+
+  .screen { position: fixed; inset: 0; display: grid; place-items: center; padding-inline: 16px; padding-block: 24px; background: rgba(8, 24, 32, 0.6); }
+  .card { width: min(100%, 440px); background: var(--panel); border: 1px solid var(--panel-line); border-radius: 22px; padding: 26px 24px 22px; display: grid; gap: 14px; text-align: center; backdrop-filter: blur(10px); }
+  .card h1 { font-family: var(--display); font-weight: 400; font-size: clamp(40px, 11vw, 58px); line-height: .95; margin: 0; letter-spacing: .5px; text-wrap: balance; }
+  .card h1 span { color: var(--orange); }
+  .card h2 { font-family: var(--display); font-weight: 400; font-size: 34px; margin: 0; text-wrap: balance; }
+  .card p { margin: 0; color: var(--muted); font-size: 15px; line-height: 1.5; }
+  .steps { display: grid; gap: 8px; text-align: left; margin: 0; padding: 0; list-style: none; }
+  .steps li { display: grid; grid-template-columns: 28px 1fr; gap: 10px; align-items: start; font-size: 14px; line-height: 1.4; }
+  .steps li i { width: 28px; height: 28px; border-radius: 8px; display: grid; place-items: center; font-style: normal; font-family: var(--display); font-size: 15px; background: rgba(127,224,230,.14); color: var(--scan); }
+  .btn { font: 900 18px var(--ui); color: #fff; background: var(--orange); border: 0; border-radius: 999px; padding: 14px 28px; cursor: pointer; box-shadow: 0 5px 0 var(--orange-dark); }
+  .btn:active { transform: translateY(3px); box-shadow: 0 2px 0 var(--orange-dark); }
+  .btn:focus-visible, .icon-btn:focus-visible { outline: 3px solid var(--scan); outline-offset: 3px; }
+  .final { display: flex; justify-content: center; gap: 28px; }
+  .final b { display: block; font-family: var(--display); font-weight: 400; font-size: 36px; font-variant-numeric: tabular-nums; }
+  .credit { font-size: 12px; color: var(--muted); }
+  .icon-btn { position: fixed; right: 16px; top: calc(env(safe-area-inset-top, 0px) + 84px); background: var(--panel); border: 1px solid var(--panel-line); color: var(--fg); border-radius: 10px; font: 800 12px var(--ui); padding: 6px 10px; cursor: pointer; }
+  @media (max-width: 420px) { .stat b { font-size: 21px; } .air-val { font-size: 18px; } .stats { gap: 10px; } }
+</style>
+
+<div id="game"></div>
+
+<div class="hud" id="hud" hidden>
+  <div class="chip air" id="airChip">
+    <div class="air-row"><span class="label">Air quality</span><span class="air-val" id="airVal">100%</span></div>
+    <div class="meter"><i id="airBar"></i></div>
+  </div>
+  <div class="chip stats">
+    <div class="stat"><span class="label">Score</span><b id="scoreVal">0</b></div>
+    <div class="stat"><span class="label">Mold</span><b id="moldVal">0</b></div>
+    <div class="stat"><span class="label">Time</span><b id="timeVal">2:00</b></div>
+  </div>
+</div>
+<div class="toast" id="toast"></div>
+<button class="icon-btn" id="muteBtn" type="button" hidden>Sound on</button>
+<div class="hint" id="hint" hidden><kbd>WASD</kbd> / arrows to move &nbsp;·&nbsp; hold <kbd>Space</kbd> to spray</div>
+
+<div class="touch" id="touch" hidden>
+  <div id="stickZone"></div>
+  <div id="stick"><i></i></div>
+  <button id="sprayBtn" type="button">SPRAY</button>
+</div>
+
+<div class="screen" id="startScreen">
+  <div class="card">
+    <h1>Mold <span>Hunter</span></h1>
+    <p>Mold is growing behind the walls of this house. Find it with your moisture scanner and clean it out before it spreads.</p>
+    <ul class="steps">
+      <li><i>1</i><span>Walk room to room. Hidden mold shows up inside your blue scanner ring.</span></li>
+      <li><i>2</i><span>Face a patch and hold spray to scrub it away. Small patches clean faster and score more.</span></li>
+      <li><i>3</i><span>Every patch lowers the air quality. Keep it above zero for 2 minutes to clear the house.</span></li>
+    </ul>
+    <button class="btn" id="playBtn" type="button">Start inspection</button>
+    <div class="credit">A game by Boise Mold Removal</div>
+  </div>
+</div>
+
+<div class="screen" id="endScreen" hidden>
+  <div class="card">
+    <h2 id="endTitle">House is mold-free!</h2>
+    <p id="endText"></p>
+    <div class="final">
+      <div><span class="label">Score</span><b id="finalScore">0</b></div>
+      <div><span class="label">Best</span><b id="bestScore">0</b></div>
+    </div>
+    <button class="btn" id="againBtn" type="button">Play again</button>
+    <div class="credit">Real mold at home? Call Boise Mold Removal.</div>
+  </div>
+</div>
+
+<script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
+<script>
+(() => {
+  // ---------- tuning ----------
+  const GAME_TIME = 120, SCAN_R = 4.6, REACH = 2.1, CONE = Math.cos(THREE.MathUtils.degToRad(55));
+  const SPEED = 5.2, PR = 0.45, WALL_H = 2.2, WALL_T = 0.4, MAX_SPOTS = 30;
+  const reduceMotion = matchMedia('(prefers-reduced-motion: reduce)').matches;
+
+  // ---------- renderer / scene ----------
+  const host = document.getElementById('game');
+  const renderer = new THREE.WebGLRenderer({ antialias: true });
+  renderer.setPixelRatio(Math.min(devicePixelRatio, 2));
+  renderer.shadowMap.enabled = true;
+  renderer.shadowMap.type = THREE.PCFSoftShadowMap;
+  host.appendChild(renderer.domElement);
+  const scene = new THREE.Scene();
+  scene.background = new THREE.Color(0x0E2A36);
+  scene.fog = new THREE.Fog(0x0E2A36, 34, 60);
+  const camera = new THREE.PerspectiveCamera(40, 1, 0.1, 200);
+
+  scene.add(new THREE.HemisphereLight(0xffffff, 0x8aa0a8, 0.62));
+  const sun = new THREE.DirectionalLight(0xffffff, 0.6);
+  sun.position.set(-8, 22, 12); sun.castShadow = true;
+  sun.shadow.mapSize.set(2048, 2048);
+  Object.assign(sun.shadow.camera, { left: -16, right: 16, top: 14, bottom: -14, near: 1, far: 60 });
+  sun.shadow.bias = -0.0005;
+  scene.add(sun);
+
+  const grad = new THREE.DataTexture(new Uint8Array([150, 150, 150, 210, 210, 210, 255, 255, 255]), 3, 1, THREE.RGBFormat);
+  grad.minFilter = grad.magFilter = THREE.NearestFilter; grad.needsUpdate = true;
+  const matCache = {};
+  const toon = c => matCache[c] || (matCache[c] = new THREE.MeshToonMaterial({ color: c, gradientMap: grad }));
+  function box(w, h, d, color, x, y, z, parent = scene) {
+    const m = new THREE.Mesh(new THREE.BoxGeometry(w, h, d), toon(color));
+    m.position.set(x, y, z); m.castShadow = true; m.receiveShadow = true; parent.add(m); return m;
+  }
+  function canvasTex(w, h, draw) {
+    const c = document.createElement('canvas'); c.width = w; c.height = h; draw(c.getContext('2d'), w, h);
+    const t = new THREE.CanvasTexture(c); t.anisotropy = 4; return t;
+  }
+
+  // ---------- house ----------
+  const solids = []; // AABBs {x0,x1,z0,z1} for collision
+  const addSolid = (cx, cz, w, d) => solids.push({ x0: cx - w / 2, x1: cx + w / 2, z0: cz - d / 2, z1: cz + d / 2 });
+
+  const yard = new THREE.Mesh(new THREE.CircleGeometry(40, 48), toon(0x3F6B4A));
+  yard.rotation.x = -Math.PI / 2; yard.position.y = -0.02; yard.receiveShadow = true; scene.add(yard);
+
+  const ROOMS = [
+    { name: 'KITCHEN', x0: -12, x1: 0, z0: -9, z1: 0, color: 0xE0D0B6 },
+    { name: 'BATHROOM', x0: 0, x1: 12, z0: -9, z1: 0, color: 0xB4D6DC },
+    { name: 'LIVING ROOM', x0: -12, x1: 0, z0: 0, z1: 9, color: 0xC49E74 },
+    { name: 'BEDROOM', x0: 0, x1: 12, z0: 0, z1: 9, color: 0xD2BDD3 },
+  ];
+  ROOMS.forEach(r => {
+    const w = r.x1 - r.x0, d = r.z1 - r.z0;
+    const f = new THREE.Mesh(new THREE.PlaneGeometry(w, d), toon(r.color));
+    f.rotation.x = -Math.PI / 2; f.position.set((r.x0 + r.x1) / 2, 0, (r.z0 + r.z1) / 2); f.receiveShadow = true; scene.add(f);
+    const lab = new THREE.Mesh(new THREE.PlaneGeometry(4.4, 0.8), new THREE.MeshBasicMaterial({
+      transparent: true, opacity: 0.32, depthWrite: false,
+      map: canvasTex(512, 92, (g, cw, ch) => { g.fillStyle = '#3B4A5A'; g.font = '900 64px Nunito, sans-serif'; g.textAlign = 'center'; g.textBaseline = 'middle'; g.fillText(r.name, cw / 2, ch / 2 + 4); }),
+    }));
+    lab.rotation.x = -Math.PI / 2; lab.position.set((r.x0 + r.x1) / 2, 0.01, (r.z0 + r.z1) / 2); scene.add(lab);
+  });
+
+  // wall pieces: axis 'x' = runs along x at z=c; axis 'z' = runs along z at x=c. sides = which faces can grow mold
+  const pieces = [];
+  function wall(axis, c, a, b, gaps, sides) {
+    let cuts = [[a, b]];
+    gaps.forEach(([g0, g1]) => { cuts = cuts.flatMap(([s, e]) => (g1 <= s || g0 >= e) ? [[s, e]] : [[s, g0], [g1, e]].filter(([p, q]) => q - p > 0.01)); });
+    cuts.forEach(([s, e]) => {
+      const len = e - s, mid = (s + e) / 2;
+      if (axis === 'x') { box(len, WALL_H, WALL_T, 0xF4ECDD, mid, WALL_H / 2, c); addSolid(mid, c, len, WALL_T); box(len, 0.08, WALL_T + 0.04, 0x3B4A5A, mid, WALL_H + 0.04, c); }
+      else { box(WALL_T, WALL_H, len, 0xF4ECDD, c, WALL_H / 2, mid); addSolid(c, mid, WALL_T, len); box(WALL_T + 0.04, 0.08, len, 0x3B4A5A, c, WALL_H + 0.04, mid); }
+      if (len > 1.6) { pieces.push({ axis, c, a: s, b: e, sides }); }
+    });
+  }
+  wall('x', -9, -12.2, 12.2, [], [1]);
+  wall('x', 9, -12.2, 12.2, [], [-1]);
+  wall('z', -12, -9, 9, [], [1]);
+  wall('z', 12, -9, 9, [], [-1]);
+  wall('x', 0, -12, 12, [[-7.2, -4.8], [4.8, 7.2]], [1, -1]);
+  wall('z', 0, -9, 9, [[-5.2, -2.8], [2.8, 5.2]], [1, -1]);
+
+  // furniture (also solid)
+  function furn(cx, cz, w, d, h, color, top) {
+    box(w, h, d, color, cx, h / 2, cz); if (top) { box(w + 0.06, 0.08, d + 0.06, top, cx, h + 0.04, cz); }
+    addSolid(cx, cz, w, d);
+  }
+  furn(-8, -8.2, 6, 1.1, 0.9, 0xFFFFFF, 0x5E7480);           // kitchen counter
+  furn(-3.2, -4.6, 2.4, 1.4, 0.85, 0xB98B5E, 0x8A633F);     // kitchen table
+  furn(9.6, -7.8, 3.6, 1.7, 0.6, 0xFFFFFF, 0xBFE3F0);        // bathtub
+  furn(3.0, -8.3, 1.1, 0.9, 0.85, 0xFFFFFF);                 // vanity
+  furn(-8, 8.0, 4.2, 1.2, 0.7, 0x2E8B95, 0x24707A);          // sofa
+  furn(-8, 5.3, 2.2, 1.0, 0.4, 0x8A633F);                    // coffee table
+  furn(9, 6.8, 3.8, 3.2, 0.55, 0xF7F2EA, 0xE8692E);          // bed
+  furn(3.2, 8.2, 1.6, 0.9, 0.9, 0xB98B5E);                   // dresser
+  const rug = new THREE.Mesh(new THREE.PlaneGeometry(5, 3.2), toon(0xC9A23A)); rug.rotation.x = -Math.PI / 2; rug.position.set(-7, 0.005, 4.4); rug.receiveShadow = true; scene.add(rug);
+
+  // ---------- player ----------
+  const player = new THREE.Group(); scene.add(player);
+  const body = new THREE.Group(); player.add(body);
+  const SUIT = 0x1F6F86;
+  const part = (geo, color, x, y, z, parent = body) => { const m = new THREE.Mesh(geo, toon(color)); m.position.set(x, y, z); m.castShadow = true; parent.add(m); return m; };
+  [-0.14, 0.14].forEach(x => { part(new THREE.CylinderGeometry(0.11, 0.12, 0.7, 10), 0x23324A, x, 0.35, 0); part(new THREE.BoxGeometry(0.2, 0.12, 0.32), 0x1E1B22, x, 0.06, 0.05); });
+  part(new THREE.CylinderGeometry(0.3, 0.3, 0.55, 14), SUIT, 0, 1.0, 0);
+  part(new THREE.SphereGeometry(0.3, 14, 10), SUIT, 0, 1.27, 0);
+  part(new THREE.SphereGeometry(0.3, 14, 10), SUIT, 0, 0.74, 0);
+  part(new THREE.BoxGeometry(0.62, 0.08, 0.05), 0xF2C230, 0, 1.1, 0.29);
+  part(new THREE.SphereGeometry(0.24, 16, 12), 0xE5B48F, 0, 1.68, 0);
+  part(new THREE.SphereGeometry(0.27, 16, 8, 0, Math.PI * 2, 0, Math.PI / 2), 0xF2C230, 0, 1.76, 0);
+  part(new THREE.CylinderGeometry(0.34, 0.34, 0.04, 16), 0xF2C230, 0, 1.77, 0.04);
+  part(new THREE.BoxGeometry(0.26, 0.15, 0.12), 0x8C97A0, 0, 1.59, 0.2);
+  [-0.08, 0.08].forEach(x => part(new THREE.SphereGeometry(0.035, 8, 6), 0x1E1B22, x, 1.73, 0.215));
+  const arm = side => {
+    const p = new THREE.Group(); p.position.set(side * 0.4, 1.32, 0); body.add(p);
+    part(new THREE.CylinderGeometry(0.085, 0.08, 0.6, 8), SUIT, 0, -0.3, 0, p);
+    part(new THREE.SphereGeometry(0.09, 8, 6), 0x2B2B30, 0, -0.62, 0, p); return p;
+  };
+  const armL = arm(1), armR = arm(-1);
+  const wand = new THREE.Group(); wand.position.set(0, -0.66, 0.05); armR.add(wand);
+  part(new THREE.BoxGeometry(0.14, 0.14, 0.5), 0x26303A, 0, 0, 0.12, wand);
+  part(new THREE.CylinderGeometry(0.05, 0.07, 0.12, 10), 0xE8692E, 0, 0, 0.42, wand).rotation.x = Math.PI / 2;
+  player.scale.setScalar(1.15);
+  const ring = new THREE.Mesh(new THREE.RingGeometry(SCAN_R - 0.08, SCAN_R, 72), new THREE.MeshBasicMaterial({ color: 0x7FE0E6, transparent: true, opacity: 0.4, depthWrite: false }));
+  ring.rotation.x = -Math.PI / 2; ring.position.y = 0.03; scene.add(ring);
+  const ringFill = new THREE.Mesh(new THREE.CircleGeometry(SCAN_R, 72), new THREE.MeshBasicMaterial({ color: 0x7FE0E6, transparent: true, opacity: 0.06, depthWrite: false }));
+  ringFill.rotation.x = -Math.PI / 2; ringFill.position.y = 0.02; scene.add(ringFill);
+
+  // ---------- mold ----------
+  function moldTex(seed) {
+    let s = seed;
+    const r = () => { s = (s * 16807) % 2147483647; return s / 2147483647; };
+    return canvasTex(256, 256, g => {
+      const halo = g.createRadialGradient(128, 128, 20, 128, 128, 124);
+      halo.addColorStop(0, 'rgba(70,84,52,.45)'); halo.addColorStop(1, 'rgba(70,84,52,0)');
+      g.fillStyle = halo; g.fillRect(0, 0, 256, 256);
+      const cols = ['#2B3526', '#3E4D33', '#1F261B', '#56633F', '#6B7A44'];
+      for (let i = 0; i < 80; i++) {
+        const a = r() * Math.PI * 2, d = Math.pow(r(), 0.8) * 94, rad = 5 + r() * 18 * (1 - d / 130);
+        g.globalAlpha = 0.8 + r() * 0.2; g.fillStyle = cols[i % cols.length];
+        g.beginPath(); g.arc(128 + Math.cos(a) * d, 128 + Math.sin(a) * d, rad, 0, 7); g.fill();
+      }
+    });
+  }
+  const MOLD_TEX = [moldTex(3), moldTex(11), moldTex(29), moldTex(47)];
+  const spotGeo = new THREE.PlaneGeometry(1, 1);
+  let spots = [];
+
+  function placeSpot(near) {
+    for (let tries = 0; tries < 14; tries++) {
+      const pc = near ? near.piece : pieces[Math.floor(Math.random() * pieces.length)];
+      const side = near ? near.side : pc.sides[Math.floor(Math.random() * pc.sides.length)];
+      const t = near ? THREE.MathUtils.clamp(near.t + (Math.random() < 0.5 ? -1 : 1) * (1.3 + Math.random() * 0.8), pc.a + 0.7, pc.b - 0.7)
+                     : pc.a + 0.7 + Math.random() * (pc.b - pc.a - 1.4);
+      const y = 0.55 + Math.random() * 1.15;
+      const off = WALL_T / 2 + 0.012;
+      const pos = pc.axis === 'x' ? new THREE.Vector3(t, y, pc.c + side * off) : new THREE.Vector3(pc.c + side * off, y, t);
+      const ground = pc.axis === 'x' ? new THREE.Vector2(t, pc.c + side * 0.7) : new THREE.Vector2(pc.c + side * 0.7, t);
+      if (spots.some(o => o.mesh.position.distanceTo(pos) < 1.25)) { continue; }
+      if (solids.some(b => ground.x > b.x0 - 0.05 && ground.x < b.x1 + 0.05 && ground.y > b.z0 - 0.05 && ground.y < b.z1 + 0.05 && b.x1 - b.x0 > WALL_T + 0.01 && b.z1 - b.z0 > WALL_T + 0.01) && Math.random() < 0.5) { continue; }
+      const mesh = new THREE.Mesh(spotGeo, new THREE.MeshBasicMaterial({ map: MOLD_TEX[Math.floor(Math.random() * 4)], transparent: true, depthWrite: false, polygonOffset: true, polygonOffsetFactor: -2 }));
+      mesh.position.copy(pos);
+      mesh.rotation.y = pc.axis === 'x' ? (side > 0 ? 0 : Math.PI) : (side > 0 ? Math.PI / 2 : -Math.PI / 2);
+      mesh.rotation.z = Math.random() * Math.PI * 2;
+      scene.add(mesh);
+      const s = { mesh, piece: pc, side, t, ground, age: 0, hp: 1, revealed: false, spreadAt: 0, dying: 0, sprayed: false };
+      spots.push(s); return s;
+    }
+    return null;
+  }
+
+  // ---------- particles ----------
+  const pGeo = new THREE.SphereGeometry(0.07, 6, 4);
+  const parts = Array.from({ length: 140 }, () => {
+    const m = new THREE.Mesh(pGeo, new THREE.MeshBasicMaterial({ color: 0xffffff, transparent: true, depthWrite: false }));
+    m.visible = false; scene.add(m); return { m, v: new THREE.Vector3(), life: 0, max: 1, grav: 0 };
+  });
+  let pIdx = 0;
+  function emit(pos, vel, color, life, size = 1, grav = 0) {
+    const p = parts[pIdx = (pIdx + 1) % parts.length];
+    p.m.position.copy(pos); p.v.copy(vel); p.m.material.color.setHex(color); p.life = p.max = life; p.grav = grav;
+    p.m.scale.setScalar(size); p.m.visible = true;
+  }
+
+  // ---------- audio ----------
+  let actx = null, sprayGain = null, muted = false;
+  function initAudio() {
+    if (actx) { return; }
+    try {
+      actx = new (window.AudioContext || window.webkitAudioContext)();
+      const len = actx.sampleRate, buf = actx.createBuffer(1, len, actx.sampleRate), d = buf.getChannelData(0);
+      for (let i = 0; i < len; i++) { d[i] = Math.random() * 2 - 1; }
+      const src = actx.createBufferSource(); src.buffer = buf; src.loop = true;
+      const bp = actx.createBiquadFilter(); bp.type = 'bandpass'; bp.frequency.value = 3200; bp.Q.value = 0.7;
+      sprayGain = actx.createGain(); sprayGain.gain.value = 0;
+      src.connect(bp).connect(sprayGain).connect(actx.destination); src.start();
+    } catch (e) { actx = null; }
+  }
+  function blip(f0, f1, dur, type = 'sine', vol = 0.18) {
+    if (!actx || muted) { return; }
+    const o = actx.createOscillator(), g = actx.createGain(), t = actx.currentTime;
+    o.type = type; o.frequency.setValueAtTime(f0, t); o.frequency.exponentialRampToValueAtTime(f1, t + dur);
+    g.gain.setValueAtTime(vol, t); g.gain.exponentialRampToValueAtTime(0.001, t + dur);
+    o.connect(g).connect(actx.destination); o.start(t); o.stop(t + dur + 0.02);
+  }
+  const setSpraySound = on => { if (sprayGain) { sprayGain.gain.setTargetAtTime(on && !muted ? 0.07 : 0, actx.currentTime, 0.04); } };
+
+  // ---------- input ----------
+  const keys = {};
+  addEventListener('keydown', e => {
+    keys[e.code] = true;
+    if (['Space', 'ArrowUp', 'ArrowDown', 'ArrowLeft', 'ArrowRight'].includes(e.code) && state === 'play') { e.preventDefault(); }
+  });
+  addEventListener('keyup', e => { keys[e.code] = false; });
+  addEventListener('blur', () => { for (const k in keys) { keys[k] = false; } touchSpray = false; stickVec.set(0, 0); });
+  const stickVec = new THREE.Vector2();
+  let stickId = null, stickOrigin = null, touchSpray = false;
+  const stickEl = document.getElementById('stick'), stickKnob = stickEl.firstElementChild, zone = document.getElementById('stickZone');
+  zone.addEventListener('pointerdown', e => {
+    stickId = e.pointerId; stickOrigin = { x: e.clientX, y: e.clientY }; zone.setPointerCapture(e.pointerId);
+    stickEl.style.left = e.clientX + 'px'; stickEl.style.top = e.clientY + 'px'; stickEl.style.opacity = '1';
+  });
+  zone.addEventListener('pointermove', e => {
+    if (e.pointerId !== stickId) { return; }
+    let dx = e.clientX - stickOrigin.x, dy = e.clientY - stickOrigin.y; const L = Math.hypot(dx, dy), M = 50;
+    if (L > M) { dx *= M / L; dy *= M / L; }
+    stickVec.set(dx / M, dy / M); stickKnob.style.transform = `translate(${dx}px, ${dy}px)`;
+  });
+  const endStick = e => { if (e.pointerId !== stickId) { return; } stickId = null; stickVec.set(0, 0); stickEl.style.opacity = '0'; stickKnob.style.transform = ''; };
+  zone.addEventListener('pointerup', endStick); zone.addEventListener('pointercancel', endStick);
+  const sprayBtn = document.getElementById('sprayBtn');
+  sprayBtn.addEventListener('pointerdown', e => { touchSpray = true; sprayBtn.classList.add('on'); sprayBtn.setPointerCapture(e.pointerId); });
+  const endSpray = () => { touchSpray = false; sprayBtn.classList.remove('on'); };
+  sprayBtn.addEventListener('pointerup', endSpray); sprayBtn.addEventListener('pointercancel', endSpray);
+
+  // ---------- UI ----------
+  const $ = id => document.getElementById(id);
+  const ui = { hud: $('hud'), air: $('airVal'), bar: $('airBar'), airChip: $('airChip'), score: $('scoreVal'), mold: $('moldVal'), time: $('timeVal'), toast: $('toast') };
+  let toastTimer = 0;
+  function toast(msg, color) { ui.toast.textContent = msg; ui.toast.style.color = color || ''; ui.toast.classList.add('show'); toastTimer = 1.6; }
+  const readBest = () => { try { return Number(localStorage.getItem('moldHunterBest')) || 0; } catch (e) { return 0; } };
+  const saveBest = v => { try { localStorage.setItem('moldHunterBest', String(v)); } catch (e) { /* storage unavailable */ } };
+  $('muteBtn').addEventListener('click', () => { muted = !muted; $('muteBtn').textContent = muted ? 'Sound off' : 'Sound on'; setSpraySound(false); });
+
+  // ---------- game state ----------
+  let state = 'menu', elapsed = 0, air = 100, score = 0, spawnTimer = 0, facing = new THREE.Vector3(0, 0, 1), warnTimer = 0, shake = 0, cleaned = 0;
+  function reset() {
+    spots.forEach(s => scene.remove(s.mesh)); spots = [];
+    elapsed = 0; air = 100; score = 0; spawnTimer = 1.5; cleaned = 0; shake = 0;
+    player.position.set(-6, 0, 4); player.rotation.y = Math.PI; facing.set(0, 0, -1);
+    for (let i = 0; i < 4; i++) { const s = placeSpot(); if (s) { s.age = 3 + Math.random() * 3; } }
+  }
+  function start() {
+    initAudio(); if (actx && actx.state === 'suspended') { actx.resume(); }
+    reset(); state = 'play';
+    $('startScreen').hidden = true; $('endScreen').hidden = true;
+    ui.hud.hidden = false; $('muteBtn').hidden = false; $('hint').hidden = false; $('touch').hidden = false;
+    blip(440, 880, 0.18, 'triangle');
+  }
+  function end(win) {
+    state = 'over'; setSpraySound(false);
+    if (win) { score += Math.round(air) * 5; }
+    const best = Math.max(readBest(), score); saveBest(best);
+    $('endTitle').textContent = win ? 'House is mold-free!' : 'Air quality hit zero';
+    $('endText').textContent = win
+      ? `You cleaned ${cleaned} patches and kept the air at ${Math.round(air)}%. Air bonus: +${Math.round(air) * 5}.`
+      : `The mold spread faster than you could clean it. You cleaned ${cleaned} patches in ${Math.floor(elapsed)} seconds.`;
+    $('finalScore').textContent = score; $('bestScore').textContent = best;
+    $('endScreen').hidden = false; $('hint').hidden = true; $('touch').hidden = true;
+    blip(win ? 523 : 330, win ? 1046 : 110, win ? 0.5 : 0.7, win ? 'triangle' : 'sawtooth', 0.16);
+    setTimeout(() => $('againBtn').focus(), 50);
+  }
+  $('playBtn').addEventListener('click', start);
+  $('againBtn').addEventListener('click', start);
+
+  // ---------- collision ----------
+  function blocked(x, z) {
+    if (x < -11.8 + PR - 0.2 || x > 11.8 - PR + 0.2 || z < -8.8 + PR - 0.2 || z > 8.8 - PR + 0.2) { return true; }
+    return solids.some(b => x + PR > b.x0 && x - PR < b.x1 && z + PR > b.z0 && z - PR < b.z1);
+  }
+
+  // ---------- loop ----------
+  const clock = new THREE.Clock();
+  const camPos = new THREE.Vector3(-6, 16, 15);
+  const tmp = new THREE.Vector3(), tmp2 = new THREE.Vector2();
+  function resize() {
+    const w = host.clientWidth, h = host.clientHeight;
+    renderer.setSize(w, h, false); camera.aspect = w / h; camera.updateProjectionMatrix();
+  }
+  addEventListener('resize', resize); resize();
+
+  function update(dt) {
+    elapsed += dt;
+    // movement
+    const mv = new THREE.Vector3(
+      (keys.KeyD || keys.ArrowRight ? 1 : 0) - (keys.KeyA || keys.ArrowLeft ? 1 : 0) + stickVec.x, 0,
+      (keys.KeyS || keys.ArrowDown ? 1 : 0) - (keys.KeyW || keys.ArrowUp ? 1 : 0) + stickVec.y);
+    const moving = mv.lengthSq() > 0.02;
+    if (mv.length() > 1) { mv.normalize(); }
+    if (moving) {
+      const nx = player.position.x + mv.x * SPEED * dt, nz = player.position.z + mv.z * SPEED * dt;
+      if (!blocked(nx, player.position.z)) { player.position.x = nx; }
+      if (!blocked(player.position.x, nz)) { player.position.z = nz; }
+      facing.lerp(tmp.copy(mv).normalize(), Math.min(1, dt * 14)).normalize();
+    }
+    player.rotation.y = Math.atan2(facing.x, facing.z);
+    const spraying = keys.Space || touchSpray;
+    setSpraySound(spraying);
+    // animation
+    const walk = moving ? Math.sin(elapsed * 12) : 0;
+    body.position.y = moving ? Math.abs(walk) * 0.06 : Math.sin(elapsed * 2.2) * 0.015;
+    armL.rotation.x = walk * 0.6;
+    armR.rotation.x = spraying ? -1.35 : -walk * 0.6;
+    ring.position.set(player.position.x, 0.03, player.position.z); ringFill.position.set(player.position.x, 0.02, player.position.z);
+    ring.material.opacity = 0.3 + 0.15 * Math.sin(elapsed * 4);
+
+    // spray particles
+    const nozzle = tmp.set(0, 0, 0); wand.children[1].getWorldPosition(nozzle);
+    if (spraying) {
+      for (let i = 0; i < 3; i++) {
+        const spread = new THREE.Vector3((Math.random() - 0.5) * 0.9, (Math.random() - 0.3) * 0.5, (Math.random() - 0.5) * 0.9);
+        emit(nozzle, facing.clone().multiplyScalar(5.5).add(spread.multiplyScalar(2)), Math.random() < 0.5 ? 0xffffff : 0x9FE3E8, 0.32 + Math.random() * 0.12, 0.8 + Math.random() * 0.8);
+      }
+    }
+
+    // spawn
+    spawnTimer -= dt;
+    if (spawnTimer <= 0 && spots.length < MAX_SPOTS) { placeSpot(); spawnTimer = Math.max(1.3, 3.8 - elapsed * 0.025); }
+
+    // mold update
+    const growT = Math.max(9, 16 - elapsed * 0.05);
+    let drain = 0;
+    for (let i = spots.length - 1; i >= 0; i--) {
+      const s = spots[i], m = s.mesh;
+      if (s.dying > 0) {
+        s.dying -= dt; const k = Math.max(0, s.dying / 0.3);
+        m.scale.setScalar(m.userData.size * (1 + (1 - k) * 0.4)); m.material.opacity = k;
+        if (s.dying <= 0) { scene.remove(m); spots.splice(i, 1); }
+        continue;
+      }
+      const dx = s.ground.x - player.position.x, dz = s.ground.y - player.position.z, d = Math.hypot(dx, dz);
+      // hit by spray?
+      s.sprayed = spraying && d < REACH && (dx * facing.x + dz * facing.z) / Math.max(d, 0.001) > CONE;
+      if (!s.sprayed) { s.age += dt; }
+      const grow = Math.min(1, s.age / growT), size = 0.4 + 1.1 * grow;
+      if (s.sprayed) {
+        s.hp -= dt * 1.25 / size; s.revealed = true;
+        if (Math.random() < 0.4) { emit(m.position, new THREE.Vector3((Math.random() - 0.5) * 2, Math.random() * 2, (Math.random() - 0.5) * 2), 0x56633F, 0.4, 0.7, -6); }
+        if (s.hp <= 0) {
+          const pts = 10 + Math.round((1 - grow) * 20);
+          score += pts; cleaned++; s.dying = 0.3; m.userData.size = size * Math.max(0.3, s.hp + 1);
+          for (let k = 0; k < 14; k++) { const a = Math.random() * Math.PI * 2; emit(m.position, new THREE.Vector3(Math.cos(a) * 2.5, 1 + Math.random() * 2.5, Math.sin(a) * 2.5), [0xffffff, 0x7FE0E6, 0xF2C230, 0x3CCB7F][k % 4], 0.7, 1.2, -5); }
+          blip(660, 1320, 0.14, 'triangle', 0.14); blip(990, 1980, 0.1, 'sine', 0.08);
+          toast(`+${pts}`, '#7FE0E6');
+          continue;
+        }
+      }
+      // spread when fully grown
+      if (grow >= 1 && s.age > s.spreadAt) { s.spreadAt = s.age + 7; if (spots.length < MAX_SPOTS && placeSpot(s)) { blip(180, 120, 0.25, 'sawtooth', 0.06); } }
+      const vis = THREE.MathUtils.clamp((SCAN_R - d) / 1.0, 0, 1);
+      if (vis > 0.6) { if (!s.revealed) { s.revealed = true; blip(1200, 1500, 0.06, 'square', 0.05); } }
+      m.material.opacity = Math.max(0.07, vis, s.revealed ? 0.75 : 0);
+      const wob = s.sprayed ? 1 + Math.sin(elapsed * 40) * 0.05 : 1;
+      m.scale.setScalar(size * Math.max(0.25, s.hp) * wob);
+      drain += size;
+    }
+    air = THREE.MathUtils.clamp(air - drain * 0.42 * dt + (spots.length === 0 ? 2 * dt : 0), 0, 100);
+
+    // particles
+    parts.forEach(p => {
+      if (!p.m.visible) { return; }
+      p.life -= dt; if (p.life <= 0) { p.m.visible = false; return; }
+      p.v.y += p.grav * dt; p.m.position.addScaledVector(p.v, dt); p.m.material.opacity = p.life / p.max;
+    });
+
+    // HUD
+    const a = Math.round(air);
+    ui.air.textContent = a + '%'; ui.bar.style.width = air + '%';
+    ui.bar.style.backgroundColor = air > 60 ? 'var(--good)' : air > 30 ? 'var(--warn)' : 'var(--bad)';
+    ui.airChip.classList.toggle('low', air <= 30);
+    ui.score.textContent = score; ui.mold.textContent = spots.filter(s => !s.dying).length;
+    const left = Math.max(0, GAME_TIME - elapsed);
+    ui.time.textContent = `${Math.floor(left / 60)}:${String(Math.floor(left % 60)).padStart(2, '0')}`;
+    if (air <= 30) { warnTimer -= dt; if (warnTimer <= 0) { warnTimer = 1.6; blip(880, 660, 0.16, 'square', 0.06); if (!reduceMotion) { shake = 0.25; } } }
+    if (toastTimer > 0) { toastTimer -= dt; if (toastTimer <= 0) { ui.toast.classList.remove('show'); } }
+
+    if (air <= 0) { end(false); } else if (left <= 0) { end(true); }
+  }
+
+  function frame() {
+    const dt = Math.min(clock.getDelta(), 0.05);
+    if (state === 'play') { update(dt); }
+    else { elapsed += dt; player.rotation.y += dt * 0.4; body.position.y = Math.sin(elapsed * 2.2) * 0.015; }
+    // camera follows the player from above and behind; pulls back on tall screens
+    const far = camera.aspect < 1 ? 1.55 : 1;
+    const target = state === 'menu' ? tmp.set(0, 0, 0) : tmp.copy(player.position);
+    const want = new THREE.Vector3(target.x, target.y + (state === 'menu' ? 26 : 15) * far, target.z + (state === 'menu' ? 22 : 11.5) * far);
+    camPos.lerp(want, Math.min(1, dt * 4));
+    camera.position.copy(camPos);
+    if (shake > 0) { shake -= dt; camera.position.x += Math.sin(elapsed * 70) * shake * 0.3; }
+    camera.lookAt(target.x, 0.8, target.z);
+    renderer.render(scene, camera);
+    requestAnimationFrame(frame);
+  }
+  reset(); state = 'menu';
+  requestAnimationFrame(frame);
+})();
+</script>
