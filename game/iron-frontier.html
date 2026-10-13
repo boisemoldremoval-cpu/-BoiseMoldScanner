@@ -437,6 +437,9 @@
   function wheel(g, r, w, x, y, z) { const m = cy(g, r, r, w, 0x1E1E1C, x, y, z, 12); m.rotation.z = Math.PI / 2; if (rig) { rig.wheels.push({ m, r }); } return m; }
   const limb = (g, w, h, d, c, x, y, z) => { const p = new THREE.Group(); p.position.set(x, y, z); g.add(p); bx(p, w, h, d, c, 0, -h / 2, 0); return p; };
   function sandbags(g, pts) { pts.forEach(([x, z, r]) => { const b = bx(g, 0.22, 0.12, 0.12, BAG, x, 0.16, z); b.rotation.y = r || 0; }); }
+  // One scale for everything (a map tile is roughly 8 m): a soldier stands about half as tall as a tank hull is long,
+  // the buggy is about two thirds of a light tank, and the Harvester and MCV are the biggest vehicles. Gameplay sizes are unchanged.
+  const UNIT_SCALE = { rifle: 0.77, gren: 0.77, rocket: 0.77, eng: 0.77, buggy: 0.72, harv: 1.15, mcv: 1.25 };
   function unitModel(type, o) {
     const c = COL[o], d = UNIT[type], g = new THREE.Group(), body = new THREE.Group(); g.add(body);
     let turret = null, cargo = null;
@@ -501,8 +504,9 @@
       bx(body, 0.07, 0.07, 0.9, c.trim, 0.22, 0.81, -0.2); bx(body, 0.2, 0.12, 0.16, MET, 0.22, 0.85, 0.24);
       cy(body, 0.12, 0.12, 0.04, 0xD8DCD2, -0.18, 0.8, -0.45, 12);
     }
-    const parts = rig; rig = null;
-    return { g, body, turret, cargo, rig: parts };
+    const parts = rig, k = UNIT_SCALE[type] || 1; rig = null;
+    body.scale.multiplyScalar(k);
+    return { g, body, turret, cargo, rig: parts, k };
   }
   function bldModel(type, o) {
     const c = COL[o], d = BLD[type], g = new THREE.Group();
@@ -843,10 +847,10 @@
     const d = UNIT[type], m = unitModel(type, o);
     const u = { id: nextId++, kind: 'unit', type, def: d, owner: o, x, z, hp: d.hp, maxhp: d.hp, facing: o === 0 ? Math.PI : 0, aim: o === 0 ? Math.PI : 0,
       path: null, pi: 0, order: null, target: null, cd: rand() * 0.5, acq: rand() * 0.3, repath: 0, moving: false, smokeT: rand(),
-      home: { x, z }, obj: m.g, body: m.body, turret: m.turret, cargo: m.cargo, rig: m.rig, turretBase: m.turret ? m.turret.position.clone() : null,
+      home: { x, z }, obj: m.g, body: m.body, turret: m.turret, cargo: m.cargo, rig: m.rig, vs: m.k, vsY: m.body.scale.y, turretBase: m.turret ? m.turret.position.clone() : null,
       spd: 0, acc: 0, odo: 0, recoil: 0, shotT: -9, idleT: rand() * 3, wq: null };
     if (type === 'harv') { u.harv = { state: 'seek', cargo: 0, tile: -1, timer: 0.6, ref: null }; }
-    u.ring = makeBracket(d.r > 0.4 ? d.r * 2.3 : 0.62, o); u.ring.position.y = d.h * 0.45; m.g.add(u.ring);
+    u.ring = makeBracket((d.r > 0.4 ? d.r * 2.3 : 0.62) * Math.max(0.8, m.k), o); u.ring.position.y = d.h * 0.45 * m.k; m.g.add(u.ring);
     contactShadow(m.g, d.r * 2.4, d.r * (d.armor === 'inf' ? 2.4 : 3.2));
     u.hb = makeHB(d.r > 0.4 ? 0.8 : 0.42); world.add(u.hb.g);
     m.g.position.set(x, 0, z); world.add(m.g);
@@ -1023,8 +1027,8 @@
   const aimPoint = e => new THREE.Vector3(e.x, e.kind === 'bld' ? 0.6 : e.kind === 'spot' ? 0 : e.def.h * 0.5, e.z);
   function muzzle(e) {
     if (e.kind === 'bld') { return new THREE.Vector3(e.x + Math.sin(e.aim) * 0.5, e.my, e.z + Math.cos(e.aim) * 0.5); }
-    const a = e.turret ? e.aim : e.facing, m = e.def.muz || [0.25, 0.35];
-    return new THREE.Vector3(e.x + Math.sin(a) * m[0], m[1], e.z + Math.cos(a) * m[0]);
+    const a = e.turret ? e.aim : e.facing, m = e.def.muz || [0.25, 0.35], k = e.vs || 1;
+    return new THREE.Vector3(e.x + Math.sin(a) * m[0] * k, m[1] * k, e.z + Math.cos(a) * m[0] * k);
   }
   let lastAlert = -99, lastHarvAlert = -99;
   function damage(t, dmg, W, src) {
@@ -2315,8 +2319,8 @@
         // idle: breathe, and now and then glance around
         e.idleT -= dt; if (e.idleT < -1.6) { e.idleT = 2 + rand() * 4; e.look = (rand() - 0.5) * 1.2; }
         e.body.rotation.y += ((e.idleT < 0 ? e.look || 0 : 0) - e.body.rotation.y) * Math.min(1, dt * 4);
-        e.body.scale.y = 0.9 * (1 + Math.sin(gameTime * 2.2 + e.id) * 0.012);
-      } else { e.body.rotation.y *= Math.max(0, 1 - dt * 8); e.body.scale.y = 0.9; }
+        e.body.scale.y = e.vsY * (1 + Math.sin(gameTime * 2.2 + e.id) * 0.012);
+      } else { e.body.rotation.y *= Math.max(0, 1 - dt * 8); e.body.scale.y = e.vsY; }
       return;
     }
     R.wheels.forEach(w => { w.m.rotation.x = e.odo / w.r; });
@@ -2423,7 +2427,7 @@
       const showHB = vis && (sel.has(e) || (e.hp < e.maxhp && e.type !== 'wall'));
       e.hb.g.visible = showHB;
       if (showHB) {
-        e.hb.g.position.set(e.x, e.kind === 'bld' ? (e.type === 'wall' ? 0.8 : 1.9) : e.def.h + 0.35, e.z); e.hb.g.quaternion.copy(q);
+        e.hb.g.position.set(e.x, e.kind === 'bld' ? (e.type === 'wall' ? 0.8 : 1.9) : e.def.h * (e.vs || 1) + 0.35, e.z); e.hb.g.quaternion.copy(q);
         e.hb.fg.scale.x = Math.max(0.001, k * e.hb.w); e.hb.fg.material.color.setHex(k > 0.6 ? 0x6FD24B : k > 0.3 ? 0xE3B341 : 0xE0452F);
       }
     }
