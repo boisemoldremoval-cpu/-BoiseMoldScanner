@@ -756,6 +756,7 @@
   // Painted building art (art/ folder). ax, ay: pixel at the footprint centre; ppt: pixels per map tile.
   const ART = {
     hq: { 0: { src: 'art/S01-vanguard.webp', w: 1152, h: 768, ax: 578, ay: 488, ppt: 270 } },
+    power: { 0: { src: 'art/S02-vanguard.webp', w: 1152, h: 768, ax: 580, ay: 462, ppt: 400 } },
   };
   const artTex = {};
   Object.values(ART).forEach(byOwner => Object.values(byOwner).forEach(a => {
@@ -2267,7 +2268,7 @@
           e.smokeT -= dt;
           if (e.smokeT <= 0) {
             e.smokeT = 0.35 + rand() * 0.2;
-            if (e.stacks && e.stacks.length) { e.stacks.forEach(st => puff(e.x + st.x, st.y, e.z + st.z, { color: 0xB9B6AC, size: 0.12, life: 1.6, vy: 0.7, vx: 0.15, grow: 3, opacity: 0.45 })); }
+            if (e.stacks && e.stacks.length && !e.art) { e.stacks.forEach(st => puff(e.x + st.x, st.y, e.z + st.z, { color: 0xB9B6AC, size: 0.12, life: 1.6, vy: 0.7, vx: 0.15, grow: 3, opacity: 0.45 })); }
             if (k < 0.5 && e.type !== 'wall') {
               const ox = (rand() - 0.5) * e.w * 0.6, oz = (rand() - 0.5) * e.h * 0.6;
               puff(e.x + ox, 1.0, e.z + oz, { color: 0x262420, size: 0.25, life: 1.8, vy: 1.0, grow: 3, opacity: 0.65 });
