@@ -270,7 +270,12 @@ export function DocumentEditor({ kind, id }: { kind: DocumentKind; id: number | 
       </section>
 
       <section className="card">
-        <h2>Line items</h2>
+        <div className="card-header">
+          <h2>Line items</h2>
+          <span className="muted small">
+            {draft.lines.length} item{draft.lines.length === 1 ? '' : 's'}
+          </span>
+        </div>
         <div className="lines">
           {draft.lines.map((line, index) => (
             <div className="line" key={index}>
@@ -312,10 +317,7 @@ export function DocumentEditor({ kind, id }: { kind: DocumentKind; id: number | 
                     onChange={(unitPriceCents) => updateLine(index, { unitPriceCents })}
                   />
                 </Field>
-                <div className="line-amount">
-                  <span className="field-label">Amount</span>
-                  <span>{formatCents(totals.lineTotalsCents[index])}</span>
-                </div>
+                <div className="line-amount">{formatCents(totals.lineTotalsCents[index])}</div>
               </div>
               <div className="line-tools">
                 <label className="check">

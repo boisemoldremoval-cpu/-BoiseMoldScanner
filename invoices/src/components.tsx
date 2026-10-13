@@ -88,6 +88,115 @@ export function formatDate(iso: string | null): string {
   return new Date(y, m - 1, d).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' });
 }
 
+// Table dates drop the year when it's the current one, so columns stay on one line.
+export function formatShortDate(iso: string | null): string {
+  if (!iso) {
+    return '';
+  }
+
+  const [y, m, d] = iso.slice(0, 10).split('-').map(Number);
+  const date = new Date(y, m - 1, d);
+  const sameYear = y === new Date().getFullYear();
+
+  return date.toLocaleDateString('en-US', { month: 'short', day: 'numeric', ...(sameYear ? {} : { year: 'numeric' }) });
+}
+
+const ICONS = {
+  overview: 'M3 13h8V3H3v10zm0 8h8v-6H3v6zm10 0h8V11h-8v10zm0-18v6h8V3h-8z',
+  invoice: 'M6 2h9l5 5v15H6V2zm8 1.5V8h4.5M9 12h8M9 16h8M9 8h3',
+  estimate: 'M4 4h16v16H4V4zm4 5h8M8 12h8M8 15h5',
+  customers: 'M16 11a3 3 0 1 0 0-6 3 3 0 0 0 0 6zM8 11a3 3 0 1 0 0-6 3 3 0 0 0 0 6zm0 2c-2.7 0-6 1.3-6 4v2h12v-2c0-2.7-3.3-4-6-4zm8 0c-.3 0-.7 0-1 .1 1.2.9 2 2.1 2 3.9v2h5v-2c0-2.7-3.3-4-6-4z',
+  services: 'M20.6 13.4 13.4 20.6a2 2 0 0 1-2.8 0L3 13V3h10l7.6 7.6a2 2 0 0 1 0 2.8zM7.5 7.5h.01',
+  settings: 'M12 15a3 3 0 1 0 0-6 3 3 0 0 0 0 6zm7.4-3a7.4 7.4 0 0 0-.1-1.2l2-1.6-2-3.4-2.4 1a7.3 7.3 0 0 0-2-1.2L14.5 3h-4l-.4 2.6a7.3 7.3 0 0 0-2 1.2l-2.4-1-2 3.4 2 1.6a7.4 7.4 0 0 0 0 2.4l-2 1.6 2 3.4 2.4-1a7.3 7.3 0 0 0 2 1.2l.4 2.6h4l.4-2.6a7.3 7.3 0 0 0 2-1.2l2.4 1 2-3.4-2-1.6c.1-.4.1-.8.1-1.2z',
+  more: 'M5 12h.01M12 12h.01M19 12h.01',
+  plus: 'M12 5v14M5 12h14',
+} as const;
+
+export function Icon({ name, size = 18 }: { name: keyof typeof ICONS; size?: number }) {
+  return (
+    <svg
+      width={size}
+      height={size}
+      viewBox="0 0 24 24"
+      fill="none"
+      stroke="currentColor"
+      strokeWidth={name === 'more' ? 3 : 1.7}
+      strokeLinecap="round"
+      strokeLinejoin="round"
+      aria-hidden="true"
+    >
+      <path d={ICONS[name]} />
+    </svg>
+  );
+}
+
+export interface MenuItem {
+  label: string;
+  onSelect: () => void;
+  danger?: boolean;
+}
+
+// A small "⋯" dropdown for secondary actions.
+export function Menu({ items, label = 'More actions' }: { items: MenuItem[]; label?: string }) {
+  const [open, setOpen] = useState(false);
+
+  useEffect(() => {
+    if (!open) {
+      return;
+    }
+
+    const close = () => setOpen(false);
+    const onKey = (e: KeyboardEvent) => e.key === 'Escape' && close();
+    window.addEventListener('click', close);
+    window.addEventListener('keydown', onKey);
+
+    return () => {
+      window.removeEventListener('click', close);
+      window.removeEventListener('keydown', onKey);
+    };
+  }, [open]);
+
+  if (items.length === 0) {
+    return null;
+  }
+
+  return (
+    <div className="menu">
+      <button
+        type="button"
+        className="button icon-only"
+        aria-label={label}
+        aria-haspopup="menu"
+        aria-expanded={open}
+        onClick={(e) => {
+          e.stopPropagation();
+          setOpen(!open);
+        }}
+      >
+        <Icon name="more" />
+      </button>
+      {open && (
+        <div className="menu-list" role="menu">
+          {items.map((item) => (
+            <button
+              key={item.label}
+              type="button"
+              role="menuitem"
+              className={item.danger ? 'menu-item danger' : 'menu-item'}
+              onClick={() => {
+                setOpen(false);
+                item.onSelect();
+              }}
+            >
+              {item.label}
+            </button>
+          ))}
+        </div>
+      )}
+    </div>
+  );
+}
+
 const METHOD_LABELS: Record<string, string> = {
   cash: 'Cash',
   check: 'Check',

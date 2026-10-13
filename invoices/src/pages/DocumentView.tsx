@@ -2,7 +2,17 @@ import { useState } from 'react';
 import { formatCents, localDate } from '../../shared/totals.ts';
 import type { BusinessSettings, DocumentDetail } from '../../shared/types.ts';
 import { del, post } from '../api.ts';
-import { DocumentPaper, Field, MoneyInput, formatDate, methodLabel } from '../components.tsx';
+import {
+  DocumentPaper,
+  Field,
+  Menu,
+  MoneyInput,
+  StatusBadge,
+  formatDate,
+  formatShortDate,
+  methodLabel,
+  type MenuItem,
+} from '../components.tsx';
 import { useFetch } from '../hooks.ts';
 import { navigate } from '../router.ts';
 
@@ -41,48 +51,108 @@ export function DocumentView({ id }: { id: number }) {
   const isInvoice = doc.kind === 'invoice';
   const editable = doc.state !== 'void' && doc.state !== 'converted';
   const canPay = isInvoice && doc.state !== 'void' && doc.balanceCents > 0;
+  const canConvert = doc.kind === 'estimate' && doc.state !== 'converted';
+  const setState = (state: string) => run(() => post<DocumentDetail>(`/documents/${doc.id}/state`, { state }));
+  const send = () =>
+    run(async () => {
+      const updated = doc.state === 'draft' ? await post<DocumentDetail>(`/documents/${doc.id}/state`, { state: 'sent' }) : doc;
+      setModal('share');
+
+      return updated;
+    });
+  const convert = () =>
+    run(async () => {
+      const invoice = await post<DocumentDetail>(`/documents/${doc.id}/convert`);
+      navigate(`/invoices/${invoice.id}`);
+    });
+
+  // Accepted estimates are ready to bill, so converting becomes the main action.
+  const convertIsPrimary = canConvert && doc.state === 'accepted';
+
+  const menu: MenuItem[] = [
+    { label: 'Print / Save PDF', onSelect: () => window.print() },
+    ...(doc.kind === 'estimate' && doc.state === 'sent'
+      ? [
+          { label: 'Mark accepted', onSelect: () => setState('accepted') },
+          { label: 'Mark declined', onSelect: () => setState('declined') },
+        ]
+      : []),
+    ...(canConvert && !convertIsPrimary ? [{ label: 'Convert to invoice', onSelect: convert }] : []),
+    {
+      label: 'Duplicate',
+      onSelect: () =>
+        run(async () => {
+          const copy = await post<DocumentDetail>(`/documents/${doc.id}/duplicate`);
+          navigate(`/${copy.kind}s/${copy.id}/edit`);
+        }),
+    },
+    ...(isInvoice && doc.state === 'sent'
+      ? [
+          {
+            label: 'Void invoice',
+            danger: true,
+            onSelect: () => {
+              if (confirm(`Void ${doc.number}? It will stay in your records but can't be paid or edited.`)) {
+                setState('void');
+              }
+            },
+          },
+        ]
+      : []),
+    ...(doc.state === 'draft'
+      ? [
+          {
+            label: 'Delete draft',
+            danger: true,
+            onSelect: () => {
+              if (confirm(`Delete draft ${doc.number}?`)) {
+                run(async () => {
+                  await del(`/documents/${doc.id}`);
+                  navigate(`/${doc.kind}s`);
+                });
+              }
+            },
+          },
+        ]
+      : []),
+  ];
 
   return (
     <div className="stack">
       <div className="page-header no-print">
         <div>
-          <a href={`#/${doc.kind}s`} className="muted small">
+          <a href={`#/${doc.kind}s`} className="back-link">
             ← {isInvoice ? 'Invoices' : 'Estimates'}
           </a>
-          <h1>
-            {doc.number} {doc.customerName && <span className="muted">· {doc.customerName}</span>}
-          </h1>
+          <div className="title-row">
+            <h1>{doc.number}</h1>
+            <StatusBadge status={doc.status} />
+          </div>
+          {doc.customerName && <div className="muted">{doc.customerName}</div>}
         </div>
-        <div className="actions wrap">
+        <div className="actions">
           {editable && (
             <a className="button" href={`#/${doc.kind}s/${doc.id}/edit`}>
               Edit
             </a>
           )}
-          <button className="button" onClick={() => window.print()}>
-            Print / PDF
-          </button>
           {canPay && (
             <button className="button" onClick={() => setModal('payment')}>
               Record payment
             </button>
           )}
-          {editable && (
-            <button
-              className="button primary"
-              onClick={() =>
-                run(async () => {
-                  const updated =
-                    doc.state === 'draft' ? await post<DocumentDetail>(`/documents/${doc.id}/state`, { state: 'sent' }) : doc;
-                  setModal('share');
-
-                  return updated;
-                })
-              }
-            >
-              {doc.state === 'draft' ? 'Send' : 'Share'}
+          {convertIsPrimary ? (
+            <button className="button primary" onClick={convert}>
+              Convert to invoice
             </button>
+          ) : (
+            editable && (
+              <button className="button primary" onClick={send}>
+                {doc.state === 'draft' ? 'Send' : 'Share link'}
+              </button>
+            )
           )}
+          <Menu items={menu} />
         </div>
       </div>
 
@@ -99,115 +169,46 @@ export function DocumentView({ id }: { id: number }) {
         </p>
       )}
 
-      <div className="view-layout">
+      <div className={isInvoice ? 'view-layout' : 'view-single'}>
         <DocumentPaper doc={doc} business={business} />
 
-        <aside className="stack-sm no-print">
-          {isInvoice && (
-            <section className="card stack-sm">
+        {isInvoice && (
+          <aside className="card stack-sm no-print">
+            <div className="card-header">
               <h2>Payments</h2>
-              {doc.payments.length === 0 && <p className="muted small">No payments recorded.</p>}
-              {doc.payments.map((payment) => (
-                <div key={payment.id} className="payment">
-                  <div>
-                    <div className="strong">{formatCents(payment.amountCents)}</div>
-                    <div className="muted small">
-                      {methodLabel(payment.method)} · {formatDate(payment.paidAt)}
-                      {payment.note && ` · ${payment.note}`}
-                    </div>
+              {canPay && (
+                <button className="link-button" onClick={() => setModal('payment')}>
+                  + Add
+                </button>
+              )}
+            </div>
+            {doc.payments.length === 0 && <p className="muted small">No payments yet.</p>}
+            {doc.payments.map((payment) => (
+              <div key={payment.id} className="payment">
+                <div>
+                  <div className="strong">{formatCents(payment.amountCents)}</div>
+                  <div className="muted small">
+                    {methodLabel(payment.method)} · {formatShortDate(payment.paidAt)}
+                    {payment.note && ` · ${payment.note}`}
                   </div>
-                  <button
-                    className="link-button danger"
-                    onClick={() =>
-                      confirm('Remove this payment?') &&
-                      run(() => del<DocumentDetail>(`/documents/${doc.id}/payments/${payment.id}`))
-                    }
-                  >
-                    Remove
-                  </button>
                 </div>
-              ))}
-              <div className="payment-summary">
-                <span>Balance due</span>
-                <span className="strong">{formatCents(doc.balanceCents)}</span>
-              </div>
-            </section>
-          )}
-
-          <section className="card stack-sm">
-            <h2>More</h2>
-            {doc.state !== 'draft' && editable && (
-              <button className="button block" onClick={() => setModal('share')}>
-                Copy customer link
-              </button>
-            )}
-            {doc.kind === 'estimate' && doc.state !== 'converted' && (
-              <button
-                className="button block primary"
-                onClick={() =>
-                  run(async () => {
-                    const invoice = await post<DocumentDetail>(`/documents/${doc.id}/convert`);
-                    navigate(`/invoices/${invoice.id}`);
-                  })
-                }
-              >
-                Convert to invoice
-              </button>
-            )}
-            {doc.kind === 'estimate' && doc.state === 'sent' && (
-              <div className="row">
                 <button
-                  className="button"
-                  onClick={() => run(() => post<DocumentDetail>(`/documents/${doc.id}/state`, { state: 'accepted' }))}
+                  className="link-button danger small"
+                  onClick={() =>
+                    confirm('Remove this payment?') &&
+                    run(() => del<DocumentDetail>(`/documents/${doc.id}/payments/${payment.id}`))
+                  }
                 >
-                  Mark accepted
-                </button>
-                <button
-                  className="button"
-                  onClick={() => run(() => post<DocumentDetail>(`/documents/${doc.id}/state`, { state: 'declined' }))}
-                >
-                  Mark declined
+                  Remove
                 </button>
               </div>
-            )}
-            <button
-              className="button block"
-              onClick={() =>
-                run(async () => {
-                  const copy = await post<DocumentDetail>(`/documents/${doc.id}/duplicate`);
-                  navigate(`/${copy.kind}s/${copy.id}/edit`);
-                })
-              }
-            >
-              Duplicate
-            </button>
-            {isInvoice && doc.state === 'sent' && (
-              <button
-                className="button block danger"
-                onClick={() =>
-                  confirm(`Void ${doc.number}? It will stay in your records but can't be paid or edited.`) &&
-                  run(() => post<DocumentDetail>(`/documents/${doc.id}/state`, { state: 'void' }))
-                }
-              >
-                Void invoice
-              </button>
-            )}
-            {doc.state === 'draft' && (
-              <button
-                className="button block danger"
-                onClick={() =>
-                  confirm(`Delete draft ${doc.number}?`) &&
-                  run(async () => {
-                    await del(`/documents/${doc.id}`);
-                    navigate(`/${doc.kind}s`);
-                  })
-                }
-              >
-                Delete draft
-              </button>
-            )}
-          </section>
-        </aside>
+            ))}
+            <div className="payment-summary">
+              <span>Balance due</span>
+              <span className="strong">{formatCents(doc.balanceCents)}</span>
+            </div>
+          </aside>
+        )}
       </div>
 
       {modal === 'share' && <ShareModal doc={doc} business={business} onClose={() => setModal(null)} />}

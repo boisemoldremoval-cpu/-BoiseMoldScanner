@@ -1,6 +1,7 @@
 import { useEffect, useState } from 'react';
 import { get, post } from './api.ts';
-import { Field } from './components.tsx';
+import { Field, Icon } from './components.tsx';
+import type { BusinessSettings } from '../shared/types.ts';
 import { useRoute } from './router.ts';
 import { Customers } from './pages/Customers.tsx';
 import { DocumentEditor } from './pages/DocumentEditor.tsx';
@@ -16,13 +17,13 @@ interface Session {
 }
 
 const NAV = [
-  { path: '', label: 'Overview' },
-  { path: 'invoices', label: 'Invoices' },
-  { path: 'estimates', label: 'Estimates' },
-  { path: 'customers', label: 'Customers' },
-  { path: 'items', label: 'Services' },
-  { path: 'settings', label: 'Settings' },
-];
+  { path: '', label: 'Overview', icon: 'overview' },
+  { path: 'invoices', label: 'Invoices', icon: 'invoice' },
+  { path: 'estimates', label: 'Estimates', icon: 'estimate' },
+  { path: 'customers', label: 'Customers', icon: 'customers' },
+  { path: 'items', label: 'Services', icon: 'services' },
+  { path: 'settings', label: 'Settings', icon: 'settings' },
+] as const;
 
 export function App() {
   const route = useRoute();
@@ -37,6 +38,7 @@ export function App() {
 
 function OwnerApp({ route }: { route: string[] }) {
   const [session, setSession] = useState<Session | null>(null);
+  const [businessName, setBusinessName] = useState('');
 
   useEffect(() => {
     const load = () => get<Session>('/session').then(setSession);
@@ -45,6 +47,14 @@ function OwnerApp({ route }: { route: string[] }) {
 
     return () => window.removeEventListener('invoices:signed-out', load);
   }, []);
+
+  useEffect(() => {
+    if (session?.authenticated) {
+      get<BusinessSettings>('/settings')
+        .then((settings) => setBusinessName(settings.name))
+        .catch(() => undefined);
+    }
+  }, [session?.authenticated, route[0]]);
 
   if (!session) {
     return null;
@@ -57,11 +67,15 @@ function OwnerApp({ route }: { route: string[] }) {
   return (
     <div className="shell">
       <nav className="nav no-print">
-        <div className="nav-brand">Invoices</div>
+        <a href="#/" className="nav-brand">
+          <img src="/favicon.svg" alt="" width={26} height={26} />
+          <span className="truncate">{businessName || 'Invoices'}</span>
+        </a>
         <div className="nav-links">
           {NAV.map((item) => (
             <a key={item.path} href={`#/${item.path}`} className={(route[0] ?? '') === item.path ? 'active' : ''}>
-              {item.label}
+              <Icon name={item.icon} />
+              <span>{item.label}</span>
             </a>
           ))}
         </div>

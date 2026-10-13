@@ -1,7 +1,7 @@
 import { useMemo, useState } from 'react';
 import { formatCents } from '../../shared/totals.ts';
 import type { Dashboard as DashboardData, DocumentKind, DocumentSummary } from '../../shared/types.ts';
-import { StatusBadge, formatDate } from '../components.tsx';
+import { StatusBadge, formatShortDate } from '../components.tsx';
 import { useFetch } from '../hooks.ts';
 import { navigate } from '../router.ts';
 
@@ -42,12 +42,17 @@ export function Dashboard() {
         <Stat label="Open estimates" value={formatCents(data.openEstimateCents)} />
       </div>
 
-      <section className="card">
-        <h2>Recent activity</h2>
+      <section className="card flush">
+        <div className="card-header pad-x">
+          <h2>Recent activity</h2>
+          <a href="#/invoices" className="small">
+            View all invoices
+          </a>
+        </div>
         {data.recent.length === 0 ? (
           <Empty />
         ) : (
-          <DocumentTable rows={data.recent} showKind />
+          <DocumentTable rows={data.recent} />
         )}
       </section>
     </div>
@@ -149,40 +154,46 @@ export function DocumentList({ kind }: { kind: DocumentKind }) {
   );
 }
 
-function DocumentTable({ rows, showKind }: { rows: DocumentSummary[]; showKind?: boolean }) {
+function DocumentTable({ rows }: { rows: DocumentSummary[] }) {
   return (
     <table className="table">
       <thead>
         <tr>
           <th>Number</th>
-          <th>Customer</th>
-          <th className="hide-sm">Issued</th>
+          <th className="hide-sm">Customer</th>
           <th className="hide-sm">Due</th>
-          <th>Status</th>
-          <th className="num">Total</th>
-          <th className="num hide-sm">Balance</th>
+          <th className="hide-sm">Status</th>
+          <th className="num">Amount</th>
         </tr>
       </thead>
       <tbody>
-        {rows.map((row) => (
-          <tr key={`${row.kind}-${row.id}`} className="clickable" onClick={() => navigate(`/${row.kind}s/${row.id}`)}>
-            <td>
-              <a href={`#/${row.kind}s/${row.id}`} onClick={(e) => e.stopPropagation()}>
-                {row.number}
-              </a>
-              {showKind && <span className="muted small"> · {row.kind}</span>}
-              {row.title && <div className="muted small">{row.title}</div>}
-            </td>
-            <td>{row.customerName || <span className="muted">—</span>}</td>
-            <td className="hide-sm">{formatDate(row.issueDate)}</td>
-            <td className="hide-sm">{formatDate(row.dueDate)}</td>
-            <td>
-              <StatusBadge status={row.status} />
-            </td>
-            <td className="num">{formatCents(row.totalCents)}</td>
-            <td className="num hide-sm">{row.kind === 'invoice' ? formatCents(row.balanceCents) : ''}</td>
-          </tr>
-        ))}
+        {rows.map((row) => {
+          const owing = row.kind === 'invoice' && row.balanceCents > 0 && row.balanceCents < row.totalCents;
+
+          return (
+            <tr key={`${row.kind}-${row.id}`} className="clickable" onClick={() => navigate(`/${row.kind}s/${row.id}`)}>
+              <td>
+                <a href={`#/${row.kind}s/${row.id}`} className="strong" onClick={(e) => e.stopPropagation()}>
+                  {row.number}
+                </a>
+                {row.title && <div className="muted small truncate hide-sm">{row.title}</div>}
+                {row.customerName && <div className="muted small truncate show-sm">{row.customerName}</div>}
+              </td>
+              <td className="truncate hide-sm">{row.customerName || <span className="muted">—</span>}</td>
+              <td className="hide-sm nowrap">{formatShortDate(row.dueDate)}</td>
+              <td className="hide-sm">
+                <StatusBadge status={row.status} />
+              </td>
+              <td className="num nowrap">
+                <div className="strong">{formatCents(row.totalCents)}</div>
+                {owing && <div className="muted small hide-sm">{formatCents(row.balanceCents)} due</div>}
+                <div className="show-sm">
+                  <StatusBadge status={row.status} />
+                </div>
+              </td>
+            </tr>
+          );
+        })}
       </tbody>
     </table>
   );

@@ -1,9 +1,11 @@
 :root {
-  --bg: #f5f6f7;
+  --bg: #f6f7f8;
   --surface: #ffffff;
-  --text: #1b1f23;
-  --muted: #646b73;
-  --border: #e1e4e8;
+  --text: #16191d;
+  --muted: #69707a;
+  --border: #e6e8eb;
+  --border-strong: #d5d9de;
+  --shadow: 0 1px 2px rgba(16, 24, 32, 0.04), 0 1px 3px rgba(16, 24, 32, 0.04);
   --accent: #1f6f5c;
   --accent-hover: #185a4a;
   --accent-soft: #e6f2ee;
@@ -13,7 +15,7 @@
   --warn-soft: #fff4d6;
   --info: #1d5fbf;
   --info-soft: #e8f0fc;
-  --radius: 8px;
+  --radius: 10px;
   font-family:
     Inter,
     -apple-system,
@@ -46,13 +48,15 @@ a:hover {
 }
 
 h1 {
-  font-size: 1.5rem;
+  font-size: 1.6rem;
+  font-weight: 650;
   margin: 0;
-  letter-spacing: -0.01em;
+  letter-spacing: -0.02em;
 }
 
 h2 {
-  font-size: 1rem;
+  font-size: 0.95rem;
+  font-weight: 650;
   margin: 0 0 0.75rem;
 }
 
@@ -68,23 +72,31 @@ p {
 }
 
 .nav {
-  width: 210px;
+  width: 224px;
   flex-shrink: 0;
   background: var(--surface);
   border-right: 1px solid var(--border);
-  padding: 20px 12px;
+  padding: 18px 12px;
   display: flex;
   flex-direction: column;
-  gap: 16px;
+  gap: 20px;
   position: sticky;
   top: 0;
   height: 100vh;
 }
 
 .nav-brand {
-  font-weight: 700;
-  font-size: 1.1rem;
-  padding: 0 10px;
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  font-weight: 650;
+  color: var(--text);
+  padding: 0 8px;
+  min-width: 0;
+}
+
+.nav-brand:hover {
+  text-decoration: none;
 }
 
 .nav-links {
@@ -94,9 +106,17 @@ p {
 }
 
 .nav-links a {
-  color: var(--text);
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  color: var(--muted);
+  font-weight: 500;
   padding: 8px 10px;
-  border-radius: 6px;
+  border-radius: 8px;
+}
+
+.nav-links a:hover {
+  color: var(--text);
 }
 
 .nav-links a:hover {
@@ -107,7 +127,6 @@ p {
 .nav-links a.active {
   background: var(--accent-soft);
   color: var(--accent);
-  font-weight: 600;
 }
 
 .nav-signout {
@@ -119,8 +138,8 @@ p {
 .content {
   flex: 1;
   min-width: 0;
-  padding: 28px 32px 64px;
-  max-width: 1200px;
+  padding: 32px 40px 72px;
+  max-width: 1160px;
 }
 
 .stack {
@@ -164,7 +183,7 @@ p {
 .page-header {
   display: flex;
   justify-content: space-between;
-  align-items: flex-end;
+  align-items: flex-start;
   gap: 16px;
   flex-wrap: wrap;
 }
@@ -180,7 +199,85 @@ p {
   background: var(--surface);
   border: 1px solid var(--border);
   border-radius: var(--radius);
+  box-shadow: var(--shadow);
   padding: 20px;
+}
+
+.card-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: baseline;
+  gap: 12px;
+  margin-bottom: 12px;
+}
+
+.card-header h2 {
+  margin: 0;
+}
+
+.card-header.pad-x {
+  padding: 18px 20px 0;
+  margin-bottom: 4px;
+}
+
+.title-row {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+}
+
+.back-link {
+  display: inline-block;
+  font-size: 0.85rem;
+  color: var(--muted);
+  margin-bottom: 6px;
+}
+
+.truncate {
+  max-width: 260px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+/* Overflow menu */
+
+.menu {
+  position: relative;
+}
+
+.menu-list {
+  position: absolute;
+  right: 0;
+  top: calc(100% + 6px);
+  min-width: 200px;
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  box-shadow: 0 12px 32px rgba(16, 24, 32, 0.12);
+  padding: 6px;
+  z-index: 20;
+  display: flex;
+  flex-direction: column;
+}
+
+.menu-item {
+  font: inherit;
+  text-align: left;
+  background: none;
+  border: none;
+  border-radius: 6px;
+  padding: 8px 10px;
+  cursor: pointer;
+  color: var(--text);
+}
+
+.menu-item:hover {
+  background: var(--bg);
+}
+
+.menu-item.danger {
+  color: var(--danger);
 }
 
 .card.flush {
@@ -212,6 +309,10 @@ p {
   white-space: nowrap;
 }
 
+.show-sm {
+  display: none;
+}
+
 .num {
   text-align: right;
   font-variant-numeric: tabular-nums;
@@ -240,8 +341,8 @@ textarea {
   color: inherit;
   width: 100%;
   padding: 8px 10px;
-  border: 1px solid var(--border);
-  border-radius: 6px;
+  border: 1px solid var(--border-strong);
+  border-radius: 8px;
   background: var(--surface);
 }
 
@@ -292,9 +393,10 @@ textarea:focus {
   align-items: center;
   justify-content: center;
   gap: 6px;
-  padding: 8px 14px;
-  border-radius: 6px;
-  border: 1px solid var(--border);
+  height: 38px;
+  padding: 0 14px;
+  border-radius: 8px;
+  border: 1px solid var(--border-strong);
   background: var(--surface);
   color: var(--text);
   cursor: pointer;
@@ -322,6 +424,11 @@ textarea:focus {
 
 .button.block {
   width: 100%;
+}
+
+.button.icon-only {
+  width: 38px;
+  padding: 0;
 }
 
 .button:disabled {
@@ -430,7 +537,8 @@ textarea:focus {
   background: var(--surface);
   border: 1px solid var(--border);
   border-radius: var(--radius);
-  padding: 16px;
+  box-shadow: var(--shadow);
+  padding: 16px 18px;
 }
 
 .stat-label {
@@ -439,8 +547,9 @@ textarea:focus {
 }
 
 .stat-value {
-  font-size: 1.5rem;
-  font-weight: 700;
+  font-size: 1.55rem;
+  font-weight: 650;
+  letter-spacing: -0.01em;
   font-variant-numeric: tabular-nums;
 }
 
@@ -470,10 +579,12 @@ textarea:focus {
 
 .table th {
   text-align: left;
-  font-size: 0.8rem;
+  font-size: 0.75rem;
   font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
   color: var(--muted);
-  padding: 10px 16px;
+  padding: 12px 20px;
   border-bottom: 1px solid var(--border);
 }
 
@@ -482,9 +593,9 @@ textarea:focus {
 }
 
 .table td {
-  padding: 12px 16px;
+  padding: 14px 20px;
   border-bottom: 1px solid var(--border);
-  vertical-align: top;
+  vertical-align: middle;
 }
 
 .table tr:last-child td {
@@ -496,7 +607,11 @@ textarea:focus {
 }
 
 .table tr.clickable:hover td {
-  background: #fafbfb;
+  background: #f9fafb;
+}
+
+.table a.strong {
+  color: var(--text);
 }
 
 .toolbar {
@@ -516,19 +631,28 @@ textarea:focus {
   flex-wrap: wrap;
 }
 
+.tabs {
+  background: #eceef1;
+  padding: 3px;
+  border-radius: 9px;
+}
+
 .tab {
   font: inherit;
-  padding: 6px 12px;
-  border-radius: 999px;
-  border: 1px solid var(--border);
-  background: var(--surface);
+  font-size: 0.9rem;
+  font-weight: 500;
+  padding: 5px 12px;
+  border-radius: 7px;
+  border: none;
+  background: transparent;
+  color: var(--muted);
   cursor: pointer;
 }
 
 .tab.active {
-  background: var(--text);
-  border-color: var(--text);
-  color: #fff;
+  background: var(--surface);
+  color: var(--text);
+  box-shadow: 0 1px 2px rgba(16, 24, 32, 0.1);
 }
 
 /* Editor */
@@ -536,17 +660,16 @@ textarea:focus {
 .lines {
   display: flex;
   flex-direction: column;
-  gap: 12px;
-  margin-bottom: 12px;
+  margin-bottom: 16px;
+  border-top: 1px solid var(--border);
 }
 
 .line {
   display: grid;
   grid-template-columns: minmax(0, 1.4fr) minmax(0, 1.6fr) auto;
   gap: 12px;
-  padding: 12px;
-  border: 1px solid var(--border);
-  border-radius: var(--radius);
+  padding: 14px 0;
+  border-bottom: 1px solid var(--border);
   align-items: start;
 }
 
@@ -564,19 +687,33 @@ textarea:focus {
 }
 
 .line-amount {
-  display: flex;
-  flex-direction: column;
-  gap: 4px;
+  align-self: end;
   text-align: right;
+  font-weight: 600;
   font-variant-numeric: tabular-nums;
-  padding-bottom: 8px;
+  padding-bottom: 9px;
 }
 
 .line-tools {
   display: flex;
-  gap: 6px;
+  gap: 4px;
   align-items: center;
-  padding-top: 4px;
+  padding-top: 26px;
+}
+
+.line-tools .icon-button {
+  border-color: transparent;
+  background: transparent;
+  color: var(--muted);
+}
+
+.line-tools .icon-button:hover:not(:disabled) {
+  background: var(--bg);
+  color: var(--text);
+}
+
+.line-tools .icon-button.danger:hover {
+  color: var(--danger);
 }
 
 .summary {
@@ -612,7 +749,7 @@ textarea:focus {
 
 .modal {
   background: var(--surface);
-  border-radius: 12px;
+  border-radius: 14px;
   padding: 24px;
   width: 100%;
   max-width: 560px;
@@ -624,8 +761,24 @@ textarea:focus {
 .view-layout {
   display: grid;
   grid-template-columns: minmax(0, 1fr) 280px;
-  gap: 20px;
+  gap: 24px;
   align-items: start;
+}
+
+.view-layout > aside {
+  position: sticky;
+  top: 24px;
+}
+
+.view-single {
+  max-width: 860px;
+}
+
+/* In the owner view the status sits next to the title, so the paper doesn't repeat it. */
+@media screen {
+  .content .paper-meta .badge {
+    display: none;
+  }
 }
 
 .payment {
@@ -648,7 +801,8 @@ textarea:focus {
   background: var(--surface);
   border: 1px solid var(--border);
   border-radius: var(--radius);
-  padding: 40px;
+  box-shadow: var(--shadow);
+  padding: 44px 48px;
   display: flex;
   flex-direction: column;
   gap: 28px;
@@ -872,6 +1026,44 @@ textarea:focus {
 
   .nav-links a {
     white-space: nowrap;
+    padding: 6px 10px;
+  }
+
+  .nav-links a svg {
+    display: none;
+  }
+
+  .nav-brand span {
+    display: none;
+  }
+
+  .truncate {
+    max-width: 140px;
+  }
+
+  .view-layout > aside {
+    position: static;
+  }
+
+  .page-header .actions {
+    width: 100%;
+    justify-content: stretch;
+  }
+
+  .page-header .actions > .button,
+  .page-header .actions > a.button {
+    flex: 1 1 auto;
+    padding: 0 10px;
+  }
+
+  .page-header .actions > .menu {
+    flex: 0 0 auto;
+  }
+
+  .table th,
+  .table td {
+    padding-left: 14px;
+    padding-right: 14px;
   }
 
   .nav-signout {
@@ -891,7 +1083,7 @@ textarea:focus {
   .view-layout,
   .line,
   .paper-parties {
-    grid-template-columns: 1fr;
+    grid-template-columns: minmax(0, 1fr);
   }
 
   .line-nums {
@@ -922,6 +1114,10 @@ textarea:focus {
   .hide-sm {
     display: none;
   }
+
+  .show-sm {
+    display: block;
+  }
 }
 
 /* Printing produces a clean single document (use "Save as PDF" for a PDF). */
@@ -947,10 +1143,28 @@ textarea:focus {
     display: block;
   }
 
+  :root {
+    font-size: 13px;
+  }
+
   .paper {
     border: none;
+    box-shadow: none;
     padding: 0;
-    gap: 20px;
+    gap: 16px;
+  }
+
+  .paper-lines td {
+    padding: 8px 0;
+  }
+
+  .paper-totals td {
+    padding: 3px 0;
+  }
+
+  .paper-totals .total-row td,
+  .paper-totals .balance-row td {
+    padding-top: 6px;
   }
 
   .paper-lines tr,
